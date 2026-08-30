@@ -77,7 +77,7 @@ async function checkRateLimit(uid, action, maxPerHour) {
 }
 
 // ─── Routes — pilot prefix inventori/ ────────────────────────────────────────
-app.post("/inventori/upload-url", requireAuth, requireAdmin, async (req, res) => {
+app.post("/storage/upload-url", requireAuth, requireAdmin, async (req, res) => {
   if (!(await checkRateLimit(req.uid, "s3_upload", 100))) {
     return res.status(429).json({ error: "Terlalu banyak permintaan, coba lagi nanti" });
   }
@@ -90,7 +90,7 @@ app.post("/inventori/upload-url", requireAuth, requireAdmin, async (req, res) =>
   res.json({ url });
 });
 
-app.post("/inventori/list-urls", requireAuth, requireActiveUser, async (req, res) => {
+app.post("/storage/list-urls", requireAuth, requireActiveUser, async (req, res) => {
   if (!(await checkRateLimit(req.uid, "s3_list", 120))) {
     return res.status(429).json({ error: "Terlalu banyak permintaan, coba lagi nanti" });
   }
@@ -104,7 +104,7 @@ app.post("/inventori/list-urls", requireAuth, requireActiveUser, async (req, res
   res.json({ urls: Object.fromEntries(entries) });
 });
 
-app.post("/inventori/file-url", requireAuth, requireActiveUser, async (req, res) => {
+app.post("/storage/file-url", requireAuth, requireActiveUser, async (req, res) => {
   if (!(await checkRateLimit(req.uid, "s3_get", 120))) {
     return res.status(429).json({ error: "Terlalu banyak permintaan, coba lagi nanti" });
   }
@@ -114,7 +114,7 @@ app.post("/inventori/file-url", requireAuth, requireActiveUser, async (req, res)
   res.json({ url });
 });
 
-app.post("/inventori/delete", requireAuth, requireAdmin, async (req, res) => {
+app.post("/storage/delete", requireAuth, requireAdmin, async (req, res) => {
   if (!(await checkRateLimit(req.uid, "s3_delete", 100))) {
     return res.status(429).json({ error: "Terlalu banyak permintaan, coba lagi nanti" });
   }

@@ -1,10 +1,11 @@
-import { useState, useEffect } from "react";
+﻿import { useState, useEffect } from "react";
 import { useParams, useSearchParams, useNavigate } from "react-router-dom";
 import {
   collection, doc, getDocs, getDoc, addDoc, updateDoc, serverTimestamp,
 } from "firebase/firestore";
-import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
-import { db, storage } from "../../firebase/config";
+import { db } from "../../firebase/config";
+import { uploadViaPresign, deleteRemote } from "../../firebase/secureStorage";
+import { useSecurePhotoUrls } from "../../hooks/useSecurePhotoUrls";
 import {
   AdminPageHeader, Button, Input, Field, Select, useToast,
 } from "../../components/admin/AdminUI";
@@ -62,19 +63,18 @@ function PDFButton({ pekerjaan, selectedLit }) {
   );
 }
 
-/* ── upload helper ────────────────────────────────────────────── */
+/* â”€â”€ upload helper â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 async function uploadImage(file, path) {
   const compressed = await imageCompression(file, {
     maxSizeMB: 0.5,
     maxWidthOrHeight: 1600,
-    useWebWorker: true,
+    useWebWorker: false,
   });
-  const storageRef = ref(storage, path);
-  await uploadBytes(storageRef, compressed);
-  return getDownloadURL(storageRef);
+  await uploadViaPresign(path, compressed, "image/jpeg");
+  return path;
 }
 
-/* ── blank state ──────────────────────────────────────────────── */
+/* â”€â”€ blank state â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 const blankPekerjaan = () => ({
   litId: "",
   nomorRLO: "",
@@ -107,6 +107,7 @@ const blankPekerjaan = () => ({
   cubicleList: [],
   tahananIsolasi: { rGnd: "", sGnd: "", tGnd: "", rS: "", sT: "", tR: "" },
   fotoMegger: { rG: null, sG: null, tG: null, rS: null, sT: null, tR: null },
+  fotoMeggerPath: { rG: null, sG: null, tG: null, rS: null, sT: null, tR: null },
   tanggalDokumenRLO: "",
   tanggalDokumenSKLO: "",
   phbtm: "",
@@ -128,15 +129,15 @@ const FOTO_KEYS = [
 ];
 
 const TAHANAN_KEYS = [
-  { key: "rGnd", label: "R - GND (MΩ)" },
-  { key: "sGnd", label: "S - GND (MΩ)" },
-  { key: "tGnd", label: "T - GND (MΩ)" },
-  { key: "rS",   label: "R - S (MΩ)" },
-  { key: "sT",   label: "S - T (MΩ)" },
-  { key: "tR",   label: "T - R (MΩ)" },
+  { key: "rGnd", label: "R - GND (MÎ©)" },
+  { key: "sGnd", label: "S - GND (MÎ©)" },
+  { key: "tGnd", label: "T - GND (MÎ©)" },
+  { key: "rS",   label: "R - S (MÎ©)" },
+  { key: "sT",   label: "S - T (MÎ©)" },
+  { key: "tR",   label: "T - R (MÎ©)" },
 ];
 
-/* ═══════════════════════════════════════════════════════════════ */
+/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
 export default function PekerjaanRLO() {
   const { id } = useParams();
   const [searchParams] = useSearchParams();
@@ -156,22 +157,24 @@ export default function PekerjaanRLO() {
   const [selectedLit, setSelectedLit] = useState(null);
   const [saving, setSaving] = useState(false);
   const [uploadingFoto, setUploadingFoto] = useState({});
+  const fotoPaths = Object.values(pekerjaan.fotoMeggerPath || {}).filter(Boolean);
+  const photoUrls = useSecurePhotoUrls(fotoPaths);
 
-  /* ── load LIT list ── */
+  /* â”€â”€ load LIT list â”€â”€ */
   useEffect(() => {
     getDocs(collection(db, "lembaga_lit")).then((snap) => {
       setLitList(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
     });
   }, []);
 
-  /* ── sync selectedLit ── */
+  /* â”€â”€ sync selectedLit â”€â”€ */
   useEffect(() => {
     if (!pekerjaan.litId) { setSelectedLit(null); return; }
     const found = litList.find((l) => l.id === pekerjaan.litId);
     setSelectedLit(found || null);
   }, [pekerjaan.litId, litList]);
 
-  /* ── load existing pekerjaan if edit ── */
+  /* â”€â”€ load existing pekerjaan if edit â”€â”€ */
   useEffect(() => {
     if (!isEdit) return;
     getDoc(doc(db, "pekerjaan", id)).then((snap) => {
@@ -181,33 +184,35 @@ export default function PekerjaanRLO() {
     });
   }, [id, isEdit]);
 
-  /* ── helpers ── */
+  /* â”€â”€ helpers â”€â”€ */
   const set = (key, val) => setPekerjaan((p) => ({ ...p, [key]: val }));
   const setNested = (parent, key, val) =>
     setPekerjaan((p) => ({ ...p, [parent]: { ...p[parent], [key]: val } }));
 
-  /* ── kabelList ── */
+  /* â”€â”€ kabelList â”€â”€ */
   const addKabel = () => set("kabelList", [...pekerjaan.kabelList, blankKabel()]);
   const updateKabel = (i, key, val) =>
     set("kabelList", pekerjaan.kabelList.map((k, idx) => idx === i ? { ...k, [key]: val } : k));
   const removeKabel = (i) => set("kabelList", pekerjaan.kabelList.filter((_, idx) => idx !== i));
 
-  /* ── cubicleList ── */
+  /* â”€â”€ cubicleList â”€â”€ */
   const addCubicle = () => set("cubicleList", [...pekerjaan.cubicleList, blankCubicle()]);
   const updateCubicle = (i, key, val) =>
     set("cubicleList", pekerjaan.cubicleList.map((c, idx) => idx === i ? { ...c, [key]: val } : c));
   const removeCubicle = (i) => set("cubicleList", pekerjaan.cubicleList.filter((_, idx) => idx !== i));
 
-  /* ── foto megger upload ── */
+  /* â”€â”€ foto megger upload â”€â”€ */
   const handleFotoUpload = async (key, file) => {
     if (!file) return;
     if (!file.type.startsWith("image/")) { show("Hanya file gambar yang diizinkan", "error"); return; }
-    if (file.size > 20 * 1024 * 1024) { show("Ukuran file maksimal 20 MB", "error"); return; }
+    if (file.size > 5 * 1024 * 1024) { show("Ukuran file maksimal 5 MB", "error"); return; }
     setUploadingFoto((p) => ({ ...p, [key]: true }));
     try {
       const docId = id || `pekerjaan_${Date.now()}`;
-      const url = await uploadImage(file, `pekerjaan/${docId}/foto/${key}`);
-      setNested("fotoMegger", key, url);
+      const path = `pekerjaan/${docId}/foto/${key}`;
+      await uploadImage(file, path);
+      setNested("fotoMeggerPath", key, path);
+      setNested("fotoMegger", key, null);
     } catch (err) {
       show("Gagal upload foto: " + err.message, "error");
     } finally {
@@ -215,7 +220,7 @@ export default function PekerjaanRLO() {
     }
   };
 
-  /* ── save ── */
+  /* â”€â”€ save â”€â”€ */
   const handleSave = async (e) => {
     e.preventDefault();
     if (!pekerjaan.nomorNIDI && !pekerjaan.nomorRLO) {
@@ -248,15 +253,15 @@ export default function PekerjaanRLO() {
     }
   };
 
-  /* ── PDF availability check ── */
+  /* â”€â”€ PDF availability check â”€â”€ */
   const canDownloadPDF = !!selectedLit && !!(pekerjaan.nomorNIDI || pekerjaan.nomorRLO);
 
-  /* ─────────────────────────────── render ── */
+  /* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ render â”€â”€ */
   return (
     <div className="min-h-screen bg-slate-50 pb-24">
       <Toast />
 
-      {/* ── Sticky action bar ── */}
+      {/* â”€â”€ Sticky action bar â”€â”€ */}
       <div className="sticky top-0 z-20 bg-white border-b border-slate-200 shadow-sm print:hidden">
         <div className="max-w-5xl mx-auto px-4 py-3 flex items-center gap-3">
           <button
@@ -294,11 +299,11 @@ export default function PekerjaanRLO() {
         </div>
       </div>
 
-      {/* ── Body ── */}
+      {/* â”€â”€ Body â”€â”€ */}
       <form onSubmit={handleSave} className="max-w-5xl mx-auto px-4 py-6 space-y-6">
 
         {/* Card 1: Pilih LIT */}
-        <Card title="LIT — Lembaga Inspeksi Teknik">
+        <Card title="LIT â€” Lembaga Inspeksi Teknik">
           <Field label="Pilih LIT" required>
             <Select
               value={pekerjaan.litId}
@@ -337,8 +342,8 @@ export default function PekerjaanRLO() {
           </div>
         </Card>
 
-        {/* Card 3: Section A — Data Umum */}
-        <Card title="A — Data Umum Pemohon">
+        {/* Card 3: Section A â€” Data Umum */}
+        <Card title="A â€” Data Umum Pemohon">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6">
             <Field label="Nomor NIDI" required>
               <Input value={pekerjaan.nomorNIDI} onChange={(e) => set("nomorNIDI", e.target.value)} />
@@ -367,8 +372,8 @@ export default function PekerjaanRLO() {
           </div>
         </Card>
 
-        {/* Card 4: Section B — Hasil Pemeriksaan */}
-        <Card title="B — Data SPJBTL & Teknis">
+        {/* Card 4: Section B â€” Hasil Pemeriksaan */}
+        <Card title="B â€” Data SPJBTL & Teknis">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6">
             <Field label="Nomor SPJBTL">
               <Input value={pekerjaan.nomorSPJBTL} onChange={(e) => set("nomorSPJBTL", e.target.value)} />
@@ -541,19 +546,24 @@ export default function PekerjaanRLO() {
               <div key={key} className="space-y-1">
                 <p className="text-sm font-medium text-slate-700">{label}</p>
                 <div className="relative aspect-video bg-slate-100 rounded-xl border-2 border-dashed border-slate-300 hover:border-amber-400 transition overflow-hidden">
-                  {pekerjaan.fotoMegger[key] ? (
+                  {(photoUrls[pekerjaan.fotoMeggerPath?.[key]] || pekerjaan.fotoMegger[key]) ? (
                     <>
                       <img
-                        src={pekerjaan.fotoMegger[key]}
+                        src={photoUrls[pekerjaan.fotoMeggerPath?.[key]] || pekerjaan.fotoMegger[key]}
                         alt={label}
                         className="w-full h-full object-cover"
                       />
                       <button
                         type="button"
-                        onClick={() => setNested("fotoMegger", key, null)}
+                        onClick={() => {
+                          const oldPath = pekerjaan.fotoMeggerPath?.[key];
+                          if (oldPath) deleteRemote(oldPath).catch(() => {});
+                          setNested("fotoMegger", key, null);
+                          setNested("fotoMeggerPath", key, null);
+                        }}
                         className="absolute top-1 right-1 w-6 h-6 bg-red-500 rounded-full flex items-center justify-center text-white text-xs"
                       >
-                        ×
+                        Ã—
                       </button>
                     </>
                   ) : uploadingFoto[key] ? (
@@ -613,7 +623,7 @@ export default function PekerjaanRLO() {
   );
 }
 
-/* ── helper component ─────────────────────────────────────────── */
+/* â”€â”€ helper component â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 function Card({ title, children, actions }) {
   return (
     <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
@@ -625,3 +635,4 @@ function Card({ title, children, actions }) {
     </div>
   );
 }
+

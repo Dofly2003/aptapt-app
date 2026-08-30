@@ -9,7 +9,7 @@ const S3_REGION   = process.env.MINIO_REGION || "us-east-1";
 const S3_BUCKET   = process.env.MINIO_BUCKET || "adytia-app";
 
 // Prefix yang diizinkan pada fase pilot. Tambah entri di sini saat ekspansi.
-const PILOT_PREFIXES = ["inventori/"];
+const PILOT_PREFIXES = ["inventori/", "pekerjaan/"];
 
 function makeClient(accessKeyId, secretAccessKey) {
   return new S3Client({
