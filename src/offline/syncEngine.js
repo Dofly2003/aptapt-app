@@ -2,8 +2,8 @@ import {
   doc, updateDoc, setDoc, deleteDoc, addDoc,
   collection as fsCollection, arrayUnion, serverTimestamp,
 } from "firebase/firestore";
-import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
-import { db as firestore, storage } from "../firebase/config";
+import { uploadViaPresign, publicUrl } from "../firebase/secureStorage";
+import { db as firestore } from "../firebase/config";
 import db from "./db";
 import { isOnline, onNetworkChange } from "./networkWatcher";
 import { readLocalPhotoAsBlob } from "./photoStore";
@@ -185,9 +185,8 @@ async function processItem(item) {
       const blob = await readLocalPhotoAsBlob(item.localPath);
       if (!blob) throw new Error("local photo blob not found");
 
-      const storageRef = ref(storage, item.storagePath);
-      await uploadBytes(storageRef, blob);
-      const url = await getDownloadURL(storageRef);
+      await uploadViaPresign(item.storagePath, blob, "image/jpeg");
+      const url = publicUrl(item.storagePath);
 
       // Merge photo URL into the array field — safe for concurrent users
       await updateDoc(docRef, {

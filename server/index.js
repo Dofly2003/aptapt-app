@@ -34,6 +34,9 @@ const PREFIX_RULES = {
   // instansi/ publik-baca (bucket policy MinIO, bukan lewat endpoint ini) —
   // hanya jalur tulis yang lewat sini, role "editor" (admin/superadmin/editor).
   "instansi/":  { writeRole: "editor", contentTypes: /^image\/(jpeg|png|webp)$/, publicRead: true },
+  // pengujian/{uid}/{docId}/... — publik-baca, tulis hanya pemilik (uid di
+  // path) atau admin (setara isOwner(userId) || isAdmin() di storage.rules).
+  "pengujian/": { writeRole: "owner", contentTypes: /^image\/(jpeg|png|webp)$/, publicRead: true },
 };
 
 function getRule(path) {
@@ -69,11 +72,22 @@ async function isActiveUser(uid) {
   return (await getUserRole(uid)) !== null;
 }
 
-async function hasWriteRole(uid, requiredRole) {
+function isAdminRole(role) {
+  return role === "admin" || role === "superadmin";
+}
+
+// requiredRole: "admin" | "editor" | "owner". Untuk "owner", path harus
+// berbentuk "prefix/{uid}/..." — segmen ke-1 (index 1) dibandingkan ke uid,
+// setara isOwner(userId) || isAdmin() di storage.rules lama.
+async function canWrite(uid, path, requiredRole) {
   const role = await getUserRole(uid);
   if (!role) return false;
-  if (requiredRole === "admin") return role === "admin" || role === "superadmin";
-  if (requiredRole === "editor") return ["admin", "superadmin", "editor"].includes(role);
+  if (requiredRole === "admin") return isAdminRole(role);
+  if (requiredRole === "editor") return isAdminRole(role) || role === "editor";
+  if (requiredRole === "owner") {
+    if (path.split("/")[1] === uid) return true;
+    return isAdminRole(role);
+  }
   return false;
 }
 
@@ -104,7 +118,7 @@ app.post("/storage/upload-url", requireAuth, async (req, res) => {
   const { path, contentType } = req.body || {};
   const rule = getRule(path);
   if (!rule) return res.status(400).json({ error: "Path tidak valid" });
-  if (!(await hasWriteRole(req.uid, rule.writeRole))) {
+  if (!(await canWrite(req.uid, path, rule.writeRole))) {
     return res.status(403).json({ error: "Akses ditolak" });
   }
   if (!rule.contentTypes.test(contentType || "")) {
@@ -145,7 +159,7 @@ app.post("/storage/delete", requireAuth, async (req, res) => {
   const { path } = req.body || {};
   const rule = getRule(path);
   if (!rule) return res.status(400).json({ error: "Path tidak valid" });
-  if (!(await hasWriteRole(req.uid, rule.writeRole))) {
+  if (!(await canWrite(req.uid, path, rule.writeRole))) {
     return res.status(403).json({ error: "Akses ditolak" });
   }
   await deleteObject(s3, path);
