@@ -1,0 +1,9 @@
+{
+  "projects": {
+    "default": "adytia-pt",
+    "n": "webdashboardptapt",
+    "dino": "adytia-pt"
+  },
+  "targets": {},
+  "etags": {}
+}

@@ -1,0 +1,56 @@
+{
+  "project_info": {
+    "project_number": "651146486503",
+    "firebase_url": "https://adytia-pt-default-rtdb.asia-southeast1.firebasedatabase.app",
+    "project_id": "adytia-pt",
+    "storage_bucket": "adytia-pt.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:651146486503:android:a8f0c65a08648b1441f842",
+        "android_client_info": {
+          "package_name": "com.ptadytia.flutter_app_mobile"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "651146486503-gnlfpdclv62a9fep1nvqut8a0qus12l3.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.ptadytia.flutter_app_mobile",
+            "certificate_hash": "d708522013a7ba45fa9cd3cc9bfc210640a4dc8e"
+          }
+        },
+        {
+          "client_id": "651146486503-t60j41hq1mjtgblhjspnm2odeaiuri16.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.ptadytia.flutter_app_mobile",
+            "certificate_hash": "748b08a6b2a241254ec0bf603404a61ac94d95f3"
+          }
+        },
+        {
+          "client_id": "651146486503-csofcn1qd2iuugfppf43l3q5lfounbte.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBDZ7yWBkYNWQMuEdt02900LWWdlBGa4ro"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "651146486503-csofcn1qd2iuugfppf43l3q5lfounbte.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

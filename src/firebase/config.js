@@ -1,0 +1,50 @@
+import { initializeApp } from "firebase/app";
+import {
+  initializeFirestore,
+  persistentLocalCache,
+  persistentMultipleTabManager,
+  persistentSingleTabManager,
+} from "firebase/firestore";
+import { getDatabase } from "firebase/database";
+import {
+  initializeAuth,
+  browserLocalPersistence,
+  browserPopupRedirectResolver,
+} from "firebase/auth";
+import { getStorage } from "firebase/storage";
+import { Capacitor } from "@capacitor/core";
+
+const isNative = Capacitor.isNativePlatform();
+
+export const firebaseConfig = {
+  apiKey:            import.meta.env.VITE_FIREBASE_API_KEY,
+  authDomain:        import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+  databaseURL:       import.meta.env.VITE_FIREBASE_DATABASE_URL,
+  projectId:         import.meta.env.VITE_FIREBASE_PROJECT_ID,
+  storageBucket:     import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+  appId:             import.meta.env.VITE_FIREBASE_APP_ID,
+};
+
+const app = initializeApp(firebaseConfig);
+
+export { app };
+
+// Firestore — pakai singleTab di native (BroadcastChannel tidak tersedia di WebView)
+export const db = initializeFirestore(app, {
+  localCache: persistentLocalCache({
+    tabManager: isNative ? persistentSingleTabManager() : persistentMultipleTabManager(),
+  }),
+});
+
+export const db2 = getDatabase(app);
+
+// Auth — jangan pakai popupRedirectResolver di native (tidak dibutuhkan)
+export const auth = isNative
+  ? initializeAuth(app, { persistence: browserLocalPersistence })
+  : initializeAuth(app, {
+      persistence: browserLocalPersistence,
+      popupRedirectResolver: browserPopupRedirectResolver,
+    });
+
+export const storage = getStorage(app);

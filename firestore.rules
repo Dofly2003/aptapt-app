@@ -1,0 +1,403 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // =========================================================================
+    // HELPERS
+    // =========================================================================
+
+    function isLoggedIn() {
+      return request.auth != null;
+    }
+
+    function userExists() {
+      return isLoggedIn()
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid));
+    }
+
+    function getUserData() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
+    function getRole() {
+      return userExists() ? getUserData().role : '';
+    }
+
+    function isNotDisabled() {
+      return userExists() && getUserData().get('disabled', false) != true;
+    }
+
+    function isActiveUser() {
+      return isLoggedIn() && isNotDisabled();
+    }
+
+    function isSuperAdmin() { return isActiveUser() && getRole() == 'superadmin'; }
+    function isAdmin()      { return isActiveUser() && (getRole() == 'admin' || getRole() == 'superadmin'); }
+    function isEditor()     { return isActiveUser() && (getRole() == 'editor' || isAdmin()); }
+    function isFinance()    { return isActiveUser() && (getRole() == 'finance' || isAdmin()); }
+
+    function ownsResource(data) {
+      return (data.keys().hasAny(['userId'])    && data.userId    == request.auth.uid)
+          || (data.keys().hasAny(['uid'])       && data.uid       == request.auth.uid)
+          || (data.keys().hasAny(['createdBy']) && data.createdBy == request.auth.uid)
+          || (data.keys().hasAny(['user_id'])   && data.user_id   == request.auth.uid)
+          || (data.keys().hasAny(['ownerId'])   && data.ownerId   == request.auth.uid);
+    }
+
+    // =========================================================================
+    // USERS
+    // =========================================================================
+    match /users/{userId} {
+      // Hanya bisa baca profil sendiri atau admin (disabled user tetap bisa baca profil sendiri untuk AuthContext)
+      allow read: if isLoggedIn() && request.auth.uid == userId;
+      allow read: if isAdmin();
+
+      // User baru bisa buat profil sendiri (set role harus 'user')
+      allow create: if isLoggedIn() && request.auth.uid == userId
+        && request.resource.data.role == 'user';
+      // Admin bisa create user selain superadmin; hanya superadmin yang bisa create superadmin
+      allow create: if isAdmin() && request.resource.data.role != 'superadmin';
+      allow create: if isSuperAdmin();
+
+      // User hanya bisa update profil sendiri, tapi tidak boleh ubah saldo/role/disabled
+      allow update: if isActiveUser() && request.auth.uid == userId
+        && !request.resource.data.diff(resource.data).affectedKeys()
+             .hasAny(['saldo', 'role', 'disabled']);
+
+      // Superadmin bisa update semua field termasuk role & disabled
+      allow update: if isSuperAdmin();
+      // Admin bisa update tapi tidak boleh ubah role & disabled
+      allow update: if isAdmin()
+        && !request.resource.data.diff(resource.data).affectedKeys()
+             .hasAny(['role', 'disabled']);
+
+      allow delete: if isSuperAdmin();
+    }
+
+    // =========================================================================
+    // SUPERADMIN WILDCARD — covers everything not listed below
+    // =========================================================================
+    match /{document=**} {
+      allow read, write: if isSuperAdmin();
+    }
+
+    // =========================================================================
+    // TECHNICIAN NOTES
+    // =========================================================================
+    match /technician_notes/{noteId} {
+      allow read, list: if isActiveUser() && (ownsResource(resource.data) || isAdmin());
+      allow create:     if isActiveUser() && ownsResource(request.resource.data);
+      allow update:     if isActiveUser() && (ownsResource(resource.data) || isAdmin());
+      allow delete:     if isActiveUser() && (ownsResource(resource.data) || isAdmin());
+
+      match /items/{itemId} {
+        allow read, list: if isActiveUser() && (ownsResource(resource.data) || isAdmin());
+        allow create:     if isActiveUser() && ownsResource(request.resource.data);
+        allow update, delete: if isActiveUser() && (ownsResource(resource.data) || isAdmin());
+      }
+    }
+
+    // =========================================================================
+    // PENGUJIAN
+    // =========================================================================
+    match /pengujian/{id} {
+      allow get:          if true; // publik bisa baca 1 dokumen (untuk share laporan)
+      allow create:       if isActiveUser() && ownsResource(request.resource.data);
+      allow update:       if isActiveUser() && (ownsResource(resource.data) || isAdmin());
+      allow delete:       if isAdmin();
+      allow list:         if isActiveUser();
+    }
+
+    // =========================================================================
+    // HARGA DAYA
+    // =========================================================================
+    match /harga_daya/{id} {
+      allow read:  if isActiveUser();
+      allow write: if isAdmin();
+    }
+
+    // =========================================================================
+    // NIDI DATA
+    // =========================================================================
+    match /nidi_data/{docId} {
+      allow create:       if isActiveUser() && ownsResource(request.resource.data);
+      allow read, update: if isActiveUser() && (ownsResource(resource.data) || isAdmin());
+      allow delete:       if isAdmin();
+      allow list:         if isActiveUser();
+    }
+
+    match /hasil/{allPaths=**} {
+      allow read:  if isActiveUser();
+      allow write: if isAdmin();
+    }
+
+    // =========================================================================
+    // TRANSAKSI LEGACY — collection "transactions" dipakai api.js / Dashboard
+    // =========================================================================
+    match /transactions/{id} {
+      allow read, list: if isActiveUser();
+      allow create:     if isFinance();
+      allow update:     if isFinance();
+      allow delete:     if isAdmin();
+    }
+
+    // =========================================================================
+    // FINANCE — saldo, saldo_history, transaksi
+    // =========================================================================
+    match /saldo/{userId} {
+      allow read:  if isLoggedIn() && (request.auth.uid == userId || isFinance());
+      allow write: if isFinance();
+    }
+
+    match /saldo_history/{id} {
+      allow read, list: if isFinance();
+      allow write:      if isFinance();
+    }
+
+    match /transaksi/{txId} {
+      allow read, list: if isActiveUser();
+      allow create:     if isFinance();
+      allow update:     if isFinance();
+      allow delete:     if isAdmin();
+    }
+
+    // =========================================================================
+    // LANDING PAGE CMS
+    // =========================================================================
+    match /slides/{id}        { allow read: if true; allow write: if isEditor(); }
+    match /services/{id}      { allow read: if true; allow write: if isEditor(); }
+    match /projects/{id}      { allow read: if true; allow write: if isEditor(); }
+    match /testimonials/{id}  { allow read: if true; allow write: if isEditor(); }
+    // settings hanya boleh dibaca user login (berisi data payment dll.)
+    match /settings/{id}      { allow read: if isActiveUser(); allow write: if isAdmin(); }
+
+    // =========================================================================
+    // MASTER DATA
+    // =========================================================================
+    match /instansi/{id} {
+      allow get:                    if true; // publik bisa baca profil instansi (untuk render laporan)
+      allow list:                   if isActiveUser();
+      allow create, update, delete: if isAdmin();
+    }
+
+    match /dpp_checklist/{id} {
+      allow read, list:             if isActiveUser();
+      allow create, update, delete: if isAdmin();
+    }
+
+    match /dpp_submissions/{id} {
+      allow read, list, write: if isAdmin();
+    }
+
+    match /dokumen_keuangan/{id} {
+      allow read, list:             if isActiveUser();
+      allow create, update, delete: if isAdmin();
+    }
+
+    match /counters/{id} {
+      allow read:           if isActiveUser();
+      allow create, update: if isAdmin();
+    }
+
+    // =========================================================================
+    // ERP — KEUANGAN & AKUNTANSI
+    // Finance role (mencakup admin & superadmin) punya akses penuh.
+    // =========================================================================
+    match /jurnal/{id}       { allow read, list, write: if isFinance(); }
+    match /hutangUsaha/{id}  { allow read, list, write: if isFinance(); }
+    match /piutangUsaha/{id} { allow read, list, write: if isFinance(); }
+    match /anggaran/{id}     { allow read, list, write: if isFinance(); }
+    match /arusKas/{id}      { allow read, list, write: if isFinance(); }
+
+    // =========================================================================
+    // ERP — SDM / HR
+    // Data sensitif — hanya admin & superadmin.
+    // =========================================================================
+    match /karyawan/{id}   { allow read, list, write: if isAdmin(); }
+    match /penggajian/{id} { allow read, list, write: if isAdmin(); }
+    match /absensi/{id}    { allow read, list, write: if isAdmin(); }
+    match /rekrutmen/{id}  { allow get: if true; allow list, write: if isAdmin(); }
+    match /kinerja/{id}    { allow read, list, write: if isAdmin(); }
+
+    // =========================================================================
+    // REKRUTMEN SUBMISSIONS — publik boleh submit, admin bisa baca & hapus
+    // =========================================================================
+    match /rekrutmen_submissions/{id} {
+      allow read, list, delete: if isAdmin();
+      allow create: if true
+        && request.resource.data.keys().hasAll(['name', 'email', 'position'])
+        && request.resource.data.keys().size() <= 15
+        && request.resource.data.name is string
+        && request.resource.data.email is string
+        && request.resource.data.position is string
+        && request.resource.data.name.size() <= 200
+        && request.resource.data.email.size() <= 200
+        && request.resource.data.position.size() <= 200;
+    }
+
+    // =========================================================================
+    // ERP — PENGADAAN / PROCUREMENT
+    // =========================================================================
+    match /vendor/{id}            { allow read, list, write: if isAdmin(); }
+    match /purchaseOrder/{id}     { allow read, list, write: if isAdmin(); }
+    match /approvalPembelian/{id} { allow read, list, write: if isAdmin(); }
+    match /penerimaanBarang/{id}  { allow read, list, write: if isAdmin(); }
+
+    // =========================================================================
+    // ERP — INVENTORI & GUDANG
+    // Stok & gudang boleh dibaca semua user login (teknisi butuh referensi stok).
+    // =========================================================================
+    match /stokBarang/{id} {
+      allow read, list:             if isActiveUser();
+      allow create, update, delete: if isAdmin();
+    }
+
+    match /gudang/{id} {
+      allow read, list:             if isActiveUser();
+      allow create, update, delete: if isAdmin();
+    }
+
+    match /pergerakanStok/{id} { allow read, list, write: if isAdmin(); }
+
+    // =========================================================================
+    // ERP — PRODUKSI / MANUFACTURING
+    // =========================================================================
+    match /billOfMaterial/{id}      { allow read, list, write: if isAdmin(); }
+    match /workOrderProduksi/{id}   { allow read, list, write: if isAdmin(); }
+    match /penjadwalanProduksi/{id} { allow read, list, write: if isAdmin(); }
+    match /inspeksiKualitas/{id}    { allow read, list, write: if isAdmin(); }
+
+    // =========================================================================
+    // ERP — PENJUALAN / CRM
+    // =========================================================================
+    match /pelanggan/{id}  { allow read, list, write: if isAdmin(); }
+    match /salesOrder/{id} { allow read, list, write: if isAdmin(); }
+    match /invoice/{id}    { allow read, list, write: if isAdmin(); }
+    match /pipeline/{id}   { allow read, list, write: if isAdmin(); }
+
+    // =========================================================================
+    // ERP — PROJECT MANAGEMENT
+    // =========================================================================
+    match /proyek/{id}      { allow read, list, write: if isAdmin(); }
+    match /sumberDaya/{id}  { allow read, list, write: if isAdmin(); }
+    match /tugasProyek/{id} { allow read, list, write: if isAdmin(); }
+
+    // =========================================================================
+    // ERP — ASET & MAINTENANCE
+    // =========================================================================
+    match /daftarAset/{id}        { allow read, list, write: if isAdmin(); }
+    match /jadwalMaintenance/{id} { allow read, list, write: if isAdmin(); }
+    match /workOrderAset/{id}     { allow read, list, write: if isAdmin(); }
+
+    // =========================================================================
+    // DOKUMEN EDITOR & SENDER TEMPLATES
+    // =========================================================================
+    match /dokumen_editor/{id} {
+      allow read, list, write: if isAdmin();
+    }
+
+    match /sender_templates/{id} {
+      allow read, list: if isActiveUser();
+      allow create:     if isActiveUser();
+      // Update & delete hanya oleh pemilik dokumen atau admin
+      allow update, delete: if isActiveUser()
+        && (resource.data.uid == request.auth.uid || isAdmin());
+    }
+
+    // =========================================================================
+    // AKUN CREDENTIALS — superadmin only (menyimpan credential sistem eksternal)
+    // =========================================================================
+    match /akun_credentials/{id} {
+      allow read, list, write: if isSuperAdmin();
+    }
+
+    // =========================================================================
+    // GUEST ACCOUNTS — superadmin manages, guest can read own doc
+    // =========================================================================
+    match /guest_accounts/{guestUid} {
+      allow read:         if isLoggedIn() && request.auth.uid == guestUid;
+      allow list, write:  if isSuperAdmin();
+    }
+
+    // =========================================================================
+    // PENDING APPROVALS — admin reviews, guests submit own changes
+    // =========================================================================
+    match /pending_approvals/{id} {
+      allow read, list:   if isAdmin();
+      allow create:       if isActiveUser()
+                            && getRole() == 'guest'
+                            && request.resource.data.guestUid == request.auth.uid
+                            && request.resource.data.operation in ['create', 'update', 'delete']
+                            && request.resource.data.targetCollection in ['dokumen_keuangan', 'pengujian']
+                            && request.resource.data.status == 'pending'
+                            && request.resource.data.keys().hasAll(
+                                 ['guestUid','operation','targetCollection','proposedData','status']);
+      allow update:       if isAdmin();
+      allow delete:       if isAdmin();
+    }
+
+    // =========================================================================
+    // RATE LIMITS — ditulis hanya oleh Cloud Functions via Admin SDK
+    // Client tidak boleh baca/tulis langsung (mencegah manipulasi counter)
+    // =========================================================================
+    match /rate_limits/{docId} {
+      allow read, write: if false;
+    }
+
+    // =========================================================================
+    // TEMP FILES — file sementara (auto-delete 24 jam via Cloud Function)
+    // Hanya superadmin yang bisa upload, baca, dan hapus.
+    // =========================================================================
+    match /temp_files/{fileId} {
+      allow read, list: if isSuperAdmin();
+      allow create:     if isSuperAdmin()
+                          && request.resource.data.uploadedBy == request.auth.uid
+                          && request.resource.data.expiresAt is timestamp;
+      allow delete:     if isSuperAdmin();
+      allow update:     if false;
+    }
+
+    // =========================================================================
+    // WORK ORDERS (proyek/teknisi) — dibaca semua user login, ditulis admin
+    // =========================================================================
+    match /work_orders/{woId} {
+      allow read, list: if isActiveUser();
+      allow write:      if isAdmin();
+
+      match /laporan/{laporanId} {
+        allow read:           if isActiveUser();
+        allow create:         if isAdmin();
+        allow update, delete: if isAdmin();
+      }
+    }
+
+    // =========================================================================
+    // ITEMS GLOBAL — katalog item, teknisi perlu baca saat laporan
+    // =========================================================================
+    match /items_global/{id} {
+      allow read, list:             if isActiveUser();
+      allow create, update, delete: if isAdmin();
+    }
+
+    // =========================================================================
+    // RLO/SKLO — LEMBAGA INSPEKSI TEKNIK (LIT)
+    // publik bisa baca 1 dokumen (render PDF), admin penuh
+    // =========================================================================
+    match /lembaga_lit/{id} {
+      allow get:                    if true;
+      allow list:                   if isActiveUser();
+      allow create, update, delete: if isAdmin();
+    }
+
+    // =========================================================================
+    // RLO/SKLO — DATA PEKERJAAN INSPEKSI
+    // publik bisa baca 1 dokumen (render laporan), admin penuh
+    // =========================================================================
+    match /pekerjaan/{id} {
+      allow get:                    if true;
+      allow list:                   if isActiveUser();
+      allow create, update, delete: if isAdmin();
+    }
+
+  }
+}

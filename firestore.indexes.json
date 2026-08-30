@@ -1,0 +1,13 @@
+{
+  "indexes": [
+    {
+      "collectionGroup": "rekrutmen_submissions",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "rekrutmenId", "order": "ASCENDING" },
+        { "fieldPath": "createdAt",   "order": "DESCENDING" }
+      ]
+    }
+  ],
+  "fieldOverrides": []
+}

@@ -1,0 +1,24 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Global safe-area fix for Capacitor / Android edge-to-edge (Android 15+).
+   env(safe-area-inset-top) = 0px on desktop and pre-Android-15 with
+   overlaysWebView:false, so this is a no-op outside mobile. */
+body {
+  padding-top: env(safe-area-inset-top, 0px);
+}
+
+/* Use this instead of h-screen on full-viewport flex layouts (e.g. DashboardLayout)
+   so the container height accounts for the status-bar inset and doesn't overflow. */
+.h-safe-screen {
+  height: calc(100vh - env(safe-area-inset-top, 0px));
+}
+
+/* Safe area utilities for Capacitor / edge-to-edge Android */
+.pt-safe  { padding-top:    env(safe-area-inset-top,    0px); }
+.pb-safe  { padding-bottom: env(safe-area-inset-bottom, 0px); }
+/* bottom padding for scrollable page content = nav height + safe area */
+.pb-safe-nav { padding-bottom: calc(5rem + env(safe-area-inset-bottom, 0px)); }
+/* bottom padding for bottom sheets = 2rem minimum + safe area */
+.pb-safe-sheet { padding-bottom: calc(2rem + env(safe-area-inset-bottom, 0px)); }

@@ -1,0 +1,219 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    function isLoggedIn() {
+      return request.auth != null;
+    }
+
+    function getUserData() {
+      return firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data;
+    }
+
+    function userExists() {
+      return isLoggedIn()
+        && firestore.exists(/databases/(default)/documents/users/$(request.auth.uid));
+    }
+
+    function isNotDisabled() {
+      return userExists() && getUserData().get('disabled', false) != true;
+    }
+
+    function isActiveUser() {
+      return isLoggedIn() && isNotDisabled();
+    }
+
+    function isOwner(userId) {
+      return isActiveUser() && request.auth.uid == userId;
+    }
+
+    function isEditor() {
+      return isActiveUser()
+        && getUserData().role in ['admin', 'superadmin', 'editor'];
+    }
+
+    function isAdmin() {
+      return isActiveUser()
+        && getUserData().role in ['admin', 'superadmin'];
+    }
+
+    function isFinance() {
+      return isActiveUser()
+        && getUserData().role in ['admin', 'superadmin', 'finance'];
+    }
+
+    function isValidImage() {
+      return request.resource.size < 5 * 1024 * 1024
+        && request.resource.contentType.matches('image/.*');
+    }
+
+    function isValidDoc() {
+      return request.resource.size < 10 * 1024 * 1024
+        && (request.resource.contentType.matches('image/.*')
+            || request.resource.contentType == 'application/pdf');
+    }
+
+    // -------------------------------------------------------------------------
+    // PENGUJIAN — teknisi upload foto ke folder milik sendiri
+    // -------------------------------------------------------------------------
+    match /pengujian/{userId}/{docId}/{allPaths=**} {
+      allow read:  if true;
+      allow write: if (isOwner(userId) || isAdmin())
+        && request.resource.size < 10 * 1024 * 1024
+        && request.resource.contentType.matches('image/.*');
+    }
+
+    // -------------------------------------------------------------------------
+    // INSTANSI — logo & TTD diakses html2canvas saat export PDF (public read)
+    // -------------------------------------------------------------------------
+    match /instansi/{allPaths=**} {
+      allow read:           if true;
+      allow create, update: if isEditor() && isValidImage();
+      allow delete:         if isEditor();
+    }
+
+    // -------------------------------------------------------------------------
+    // LANDING PAGE CMS — slides, services, projects, testimonials
+    // -------------------------------------------------------------------------
+    match /landing/{allPaths=**} {
+      allow read:           if true;
+      allow create, update: if isEditor() && isValidImage();
+      allow delete:         if isEditor();
+    }
+
+    // -------------------------------------------------------------------------
+    // DPP — dokumen checklist & foto submission
+    // -------------------------------------------------------------------------
+    match /dpp/{allPaths=**} {
+      allow read:  if isActiveUser();
+      allow write: if isAdmin() && isValidDoc();
+    }
+
+    // -------------------------------------------------------------------------
+    // DOKUMEN KEUANGAN — hanya admin/finance
+    // -------------------------------------------------------------------------
+    match /dokumen/{allPaths=**} {
+      allow read:  if isActiveUser();
+      allow write: if (isAdmin() || isFinance()) && isValidDoc();
+    }
+
+    // -------------------------------------------------------------------------
+    // LAPORAN TEKNISI — teknisi upload, semua login bisa baca
+    // -------------------------------------------------------------------------
+    match /laporan/{allPaths=**} {
+      allow read:  if isActiveUser();
+      allow write: if isAdmin() && isValidDoc();
+    }
+
+    // -------------------------------------------------------------------------
+    // REKRUTMEN — pelamar upload CV/foto/video tanpa login, maks 50 MB
+    // -------------------------------------------------------------------------
+    match /rekrutmen/{allPaths=**} {
+      allow read:   if isAdmin();
+      allow create: if request.resource.size < 50 * 1024 * 1024
+        && (request.resource.contentType.matches('image/.*')
+            || request.resource.contentType == 'application/pdf'
+            || request.resource.contentType == 'application/msword'
+            || request.resource.contentType == 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+    }
+
+    // -------------------------------------------------------------------------
+    // DOWNLOADS — APK & file distribusi, hanya admin yang bisa upload
+    // -------------------------------------------------------------------------
+    match /downloads/{allPaths=**} {
+      allow read:   if true;
+      allow create, update: if isAdmin()
+        && request.resource.size < 200 * 1024 * 1024
+        && (request.resource.contentType == 'application/vnd.android.package-archive'
+            || request.resource.contentType == 'application/zip'
+            || request.resource.contentType == 'application/pdf');
+      allow delete: if isAdmin();
+    }
+
+    // -------------------------------------------------------------------------
+    // NIDI DATA — sertifikat NIDI & SLO, hanya admin yang bisa upload
+    // -------------------------------------------------------------------------
+    match /nidi_data/{allPaths=**} {
+      allow read:  if isActiveUser();
+      allow write: if isAdmin() && isValidDoc();
+    }
+
+    // -------------------------------------------------------------------------
+    // PEKERJAAN RLO — foto megger, hanya admin
+    // -------------------------------------------------------------------------
+    match /pekerjaan/{allPaths=**} {
+      allow read:  if isActiveUser();
+      allow write: if isAdmin() && isValidImage();
+    }
+
+    // -------------------------------------------------------------------------
+    // LEMBAGA LIT — logo, TTD, stempel, hanya admin
+    // -------------------------------------------------------------------------
+    match /lembaga_lit/{allPaths=**} {
+      allow read:  if true;
+      allow write: if isAdmin() && isValidImage();
+    }
+
+    // -------------------------------------------------------------------------
+    // TEMP FILES — file sementara 24 jam, hanya superadmin bisa upload & hapus
+    // read public agar URL download bisa diakses tanpa auth (share link)
+    // -------------------------------------------------------------------------
+    function isSuperAdmin() {
+      return isActiveUser() && getUserData().role == 'superadmin';
+    }
+
+    match /temp_files/{userId}/{fileId}/{fileName} {
+      allow read:   if true;
+      allow create: if isSuperAdmin()
+                      && request.auth.uid == userId
+                      && request.resource.size < 200 * 1024 * 1024
+                      && (request.resource.contentType == 'application/pdf'
+                          || request.resource.contentType.matches('image/.*')
+                          || request.resource.contentType == 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+                          || request.resource.contentType == 'application/zip');
+      allow delete: if isSuperAdmin();
+    }
+
+    // -------------------------------------------------------------------------
+    // INVENTORI — foto barang, admin upload & read
+    // -------------------------------------------------------------------------
+    match /inventori/{allPaths=**} {
+      allow read:  if isActiveUser();
+      allow write: if isAdmin() && isValidImage();
+    }
+
+    // -------------------------------------------------------------------------
+    // ALAT KERJA — foto alat, admin upload & read
+    // -------------------------------------------------------------------------
+    match /alatKerja/{allPaths=**} {
+      allow read:  if isActiveUser();
+      allow write: if isAdmin() && isValidImage();
+    }
+
+    // -------------------------------------------------------------------------
+    // PDF CONVERTER — upload temp & hasil konversi (per-user, maks 15 MB)
+    // pdf_temp: ditulis user, dihapus oleh Cloud Function setelah konversi
+    // pdf_converted: ditulis oleh Cloud Function (admin SDK, bypass rules)
+    // -------------------------------------------------------------------------
+    match /pdf_temp/{userId}/{fileName} {
+      allow create: if isOwner(userId)
+                      && request.resource.size < 30 * 1024 * 1024
+                      && request.resource.contentType == 'application/pdf';
+      allow delete: if isOwner(userId) || isAdmin();
+      allow read:   if isOwner(userId) || isAdmin();
+    }
+
+    match /pdf_converted/{userId}/{fileName} {
+      allow read:   if isOwner(userId) || isAdmin();
+      allow delete: if isOwner(userId) || isAdmin();
+    }
+
+    // -------------------------------------------------------------------------
+    // DEFAULT DENY — semua path lain ditolak
+    // -------------------------------------------------------------------------
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+
+  }
+}

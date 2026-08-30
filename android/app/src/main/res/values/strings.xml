@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">PT Adytia App</string>
+    <string name="title_activity_main">PT Adytia App</string>
+    <string name="package_name">com.adytia.app</string>
+    <string name="custom_url_scheme">com.adytia.app</string>
+</resources>
