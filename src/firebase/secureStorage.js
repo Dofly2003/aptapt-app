@@ -5,6 +5,17 @@ import { auth } from "./config";
 // keluar ke MinIO butuh Blaze. Auth tetap verifikasi Firebase ID Token.
 const API_BASE = import.meta.env.VITE_SECURE_STORAGE_API_URL || "https://api.pt-adytia.com";
 
+// Base URL objek publik (bucket policy MinIO public-read per-prefix, mis. instansi/).
+// Beda dari API_BASE di atas — ini langsung ke storage, bukan lewat server/.
+const PUBLIC_STORAGE_BASE = import.meta.env.VITE_STORAGE_PUBLIC_BASE_URL
+  || "https://storage.pt-adytia.com/adytia-app";
+
+// Untuk prefix yang public-read di bucket (instansi/) — URL permanen, tidak expire,
+// tidak butuh token. JANGAN dipakai untuk prefix privat (inventori/, pekerjaan/, dst).
+export function publicUrl(path) {
+  return `${PUBLIC_STORAGE_BASE}/${path}`;
+}
+
 async function authedFetch(path, body) {
   const token = await auth.currentUser?.getIdToken();
   if (!token) throw new Error("Belum login");

@@ -31,6 +31,9 @@ const PREFIX_RULES = {
   "inventori/": { writeRole: "admin", contentTypes: /^image\/(jpeg|png|webp)$/ },
   "pekerjaan/": { writeRole: "admin", contentTypes: /^image\/(jpeg|png|webp)$/ },
   "nidi_data/": { writeRole: "admin", contentTypes: /^(image\/(jpeg|png|webp)|application\/pdf)$/ },
+  // instansi/ publik-baca (bucket policy MinIO, bukan lewat endpoint ini) —
+  // hanya jalur tulis yang lewat sini, role "editor" (admin/superadmin/editor).
+  "instansi/":  { writeRole: "editor", contentTypes: /^image\/(jpeg|png|webp)$/, publicRead: true },
 };
 
 function getRule(path) {

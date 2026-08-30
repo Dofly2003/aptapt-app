@@ -1,9 +1,9 @@
-import { db, storage } from "../firebase/config";
+﻿import { db } from "../firebase/config";
 import {
   collection, doc, getDocs, getDoc, addDoc, updateDoc, deleteDoc,
   serverTimestamp,
 } from "firebase/firestore";
-import { ref, uploadBytes, getDownloadURL, deleteObject } from "firebase/storage";
+import { uploadViaPresign, deleteRemote, publicUrl } from "../firebase/secureStorage";
 import imageCompression from "browser-image-compression";
 
 const COL = "instansi";
@@ -38,7 +38,7 @@ export async function updateInstansi(id, data) {
   });
 }
 
-/** Soft delete — laporan lama tetap terbaca, tapi tidak muncul di dropdown form. */
+/** Soft delete â€” laporan lama tetap terbaca, tapi tidak muncul di dropdown form. */
 export async function softDeleteInstansi(id) {
   await updateDoc(doc(db, COL, id), {
     aktif: false,
@@ -46,7 +46,7 @@ export async function softDeleteInstansi(id) {
   });
 }
 
-/** Hard delete — hapus dokumen + semua aset. Hati-hati. */
+/** Hard delete â€” hapus dokumen + semua aset. Hati-hati. */
 export async function hardDeleteInstansi(id) {
   const inst = await getInstansi(id);
   if (inst?.logo?.path) await safeDelete(inst.logo.path);
@@ -65,13 +65,11 @@ export async function uploadInstansiImage(file, folder, opts = {}) {
   const compressed = opts.skipCompress ? file : await imageCompression(file, {
     maxSizeMB: opts.maxSizeMB ?? 0.4,
     maxWidthOrHeight: opts.maxWidthOrHeight ?? 800,
-    useWebWorker: true,
+    useWebWorker: false,
   });
   const path = `instansi/${folder}/${Date.now()}_${file.name}`;
-  const r = ref(storage, path);
-  await uploadBytes(r, compressed);
-  const url = await getDownloadURL(r);
-  return { url, path };
+  await uploadViaPresign(path, compressed, "image/jpeg");
+  return { url: publicUrl(path), path };
 }
 
 export async function deleteInstansiImage(path) {
@@ -80,6 +78,6 @@ export async function deleteInstansiImage(path) {
 }
 
 async function safeDelete(path) {
-  try { await deleteObject(ref(storage, path)); }
-  catch (e) { console.warn("delete failed:", path, e.code); }
+  try { await deleteRemote(path); }
+  catch (e) { console.warn("delete failed:", path, e); }
 }
