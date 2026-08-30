@@ -1,8 +1,8 @@
 import { useEffect, useState, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { db, storage } from "../../firebase/config";
+import { db } from "../../firebase/config";
 import { doc, getDoc, updateDoc, serverTimestamp } from "firebase/firestore";
-import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
+import { uploadViaPresign, presignGetOne } from "../../firebase/secureStorage";
 import {
   ArrowLeft, CheckCircle, MapPin, User, Zap, FileText, Upload, Download
 } from "lucide-react";
@@ -98,27 +98,33 @@ export default function WoPenyelesaian() {
     }
     setSaving(true);
     try {
-      const nidiRef = ref(storage, `nidi_data/${id}/sertifikat_nidi.pdf`);
-      const sloRef  = ref(storage, `nidi_data/${id}/sertifikat_slo.pdf`);
-      await uploadBytes(nidiRef, pdfNidi);
-      await uploadBytes(sloRef, pdfSlo);
-      const [nidiUrl, sloUrl] = await Promise.all([
-        getDownloadURL(nidiRef),
-        getDownloadURL(sloRef),
-      ]);
+      const nidiPath = `nidi_data/${id}/sertifikat_nidi.pdf`;
+      const sloPath  = `nidi_data/${id}/sertifikat_slo.pdf`;
+      await uploadViaPresign(nidiPath, pdfNidi, "application/pdf");
+      await uploadViaPresign(sloPath, pdfSlo, "application/pdf");
       await updateDoc(doc(db, "nidi_data", id), {
         status: "done",
         selesaiAt: serverTimestamp(),
-        sertifikatNidiUrl: nidiUrl,
-        sertifikatSloUrl: sloUrl,
+        sertifikatNidiPath: nidiPath,
+        sertifikatSloPath: sloPath,
       });
-      setData(prev => ({ ...prev, status: "done", sertifikatNidiUrl: nidiUrl, sertifikatSloUrl: sloUrl }));
+      setData(prev => ({ ...prev, status: "done", sertifikatNidiPath: nidiPath, sertifikatSloPath: sloPath }));
       show("Work order selesai. Sertifikat berhasil disimpan.");
     } catch (err) {
       console.error("Gagal menandai WO selesai:", err);
       show("Gagal menyimpan. Coba lagi.", "error");
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleDownload = async (path) => {
+    try {
+      const url = await presignGetOne(path);
+      window.open(url, "_blank", "noopener");
+    } catch (err) {
+      console.error("Gagal membuka sertifikat:", err);
+      show("Gagal membuka file, coba lagi", "error");
     }
   };
 
@@ -272,12 +278,21 @@ export default function WoPenyelesaian() {
             <CheckCircle size={18} /> Work Order Selesai
           </div>
 
-          {(data.sertifikatNidiUrl || data.sertifikatSloUrl) && (
+          {(data.sertifikatNidiPath || data.sertifikatNidiUrl || data.sertifikatSloPath || data.sertifikatSloUrl) && (
             <div className="bg-white rounded-2xl shadow p-5 space-y-3">
               <div className="flex items-center gap-2 text-slate-600 font-semibold">
                 <Download size={16} /> Unduh Sertifikat
               </div>
-              {data.sertifikatNidiUrl && (
+              {data.sertifikatNidiPath ? (
+                <button
+                  type="button"
+                  onClick={() => handleDownload(data.sertifikatNidiPath)}
+                  className="w-full flex items-center gap-3 text-sm text-blue-700 font-medium bg-blue-50 hover:bg-blue-100 rounded-xl p-3 transition text-left"
+                >
+                  <FileText size={16} className="text-blue-500 shrink-0" />
+                  Sertifikat NIDI
+                </button>
+              ) : data.sertifikatNidiUrl && (
                 <a
                   href={data.sertifikatNidiUrl}
                   target="_blank"
@@ -288,7 +303,16 @@ export default function WoPenyelesaian() {
                   Sertifikat NIDI
                 </a>
               )}
-              {data.sertifikatSloUrl && (
+              {data.sertifikatSloPath ? (
+                <button
+                  type="button"
+                  onClick={() => handleDownload(data.sertifikatSloPath)}
+                  className="w-full flex items-center gap-3 text-sm text-emerald-700 font-medium bg-emerald-50 hover:bg-emerald-100 rounded-xl p-3 transition text-left"
+                >
+                  <FileText size={16} className="text-emerald-500 shrink-0" />
+                  Sertifikat SLO
+                </button>
+              ) : data.sertifikatSloUrl && (
                 <a
                   href={data.sertifikatSloUrl}
                   target="_blank"

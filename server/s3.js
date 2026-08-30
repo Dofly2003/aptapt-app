@@ -8,9 +8,6 @@ const S3_ENDPOINT = process.env.MINIO_ENDPOINT || "https://storage.pt-adytia.com
 const S3_REGION   = process.env.MINIO_REGION || "us-east-1";
 const S3_BUCKET   = process.env.MINIO_BUCKET || "adytia-app";
 
-// Prefix yang diizinkan pada fase pilot. Tambah entri di sini saat ekspansi.
-const PILOT_PREFIXES = ["inventori/", "pekerjaan/"];
-
 function makeClient(accessKeyId, secretAccessKey) {
   return new S3Client({
     endpoint: S3_ENDPOINT,
@@ -20,13 +17,15 @@ function makeClient(accessKeyId, secretAccessKey) {
   });
 }
 
-function isPilotPath(key) {
+// Validasi syntax path saja (traversal/encoding). Whitelist prefix + role
+// dicek terpisah di index.js lewat PREFIX_RULES, supaya s3.js tetap generik.
+function isSafePath(key) {
   if (!key || typeof key !== "string") return false;
   let decoded;
   try { decoded = decodeURIComponent(key); } catch { return false; }
   if (decoded.includes("..") || decoded.includes("\x00") || decoded.startsWith("/")) return false;
   if (key.includes("%")) return false; // tolak sisa encoding / double-encoding
-  return PILOT_PREFIXES.some((p) => key.startsWith(p));
+  return true;
 }
 
 const presignGet = (c, key, expiresIn) =>
@@ -38,4 +37,4 @@ const presignPut = (c, key, contentType, expiresIn) =>
 const deleteObject = (c, key) =>
   c.send(new DeleteObjectCommand({ Bucket: S3_BUCKET, Key: key }));
 
-module.exports = { makeClient, isPilotPath, presignGet, presignPut, deleteObject };
+module.exports = { makeClient, isSafePath, presignGet, presignPut, deleteObject };

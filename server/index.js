@@ -1,10 +1,10 @@
-// server/index.js — API presigned-URL untuk pilot Storage->MinIO (prefix inventori/)
+// server/index.js — API presigned-URL untuk Storage->MinIO
 // Jalan di VPS (bukan Firebase), auth tetap verifikasi Firebase ID Token via firebase-admin.
 require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
 const admin = require("firebase-admin");
-const { makeClient, isPilotPath, presignGet, presignPut, deleteObject } = require("./s3");
+const { makeClient, isSafePath, presignGet, presignPut, deleteObject } = require("./s3");
 
 if (!admin.apps.length) {
   admin.initializeApp({ credential: admin.credential.applicationDefault() });
@@ -24,7 +24,22 @@ app.use(cors({
   },
 }));
 
-// ─── Auth & role helpers (setara isActiveUser/isAdmin di storage.rules) ──────
+// ─── Prefix -> aturan tulis (role + tipe file yang diizinkan) ────────────────
+// Baca selalu "user aktif" untuk semua prefix di sini (prefix publik-baca
+// seperti instansi/ butuh desain terpisah, lihat catatan migrasi, belum masuk).
+const PREFIX_RULES = {
+  "inventori/": { writeRole: "admin", contentTypes: /^image\/(jpeg|png|webp)$/ },
+  "pekerjaan/": { writeRole: "admin", contentTypes: /^image\/(jpeg|png|webp)$/ },
+  "nidi_data/": { writeRole: "admin", contentTypes: /^(image\/(jpeg|png|webp)|application\/pdf)$/ },
+};
+
+function getRule(path) {
+  if (!isSafePath(path)) return null;
+  const prefix = Object.keys(PREFIX_RULES).find((p) => path.startsWith(p));
+  return prefix ? PREFIX_RULES[prefix] : null;
+}
+
+// ─── Auth & role helpers ──────────────────────────────────────────────────
 async function requireAuth(req, res, next) {
   const header = req.headers.authorization || "";
   const token = header.startsWith("Bearer ") ? header.slice(7) : null;
@@ -37,31 +52,33 @@ async function requireAuth(req, res, next) {
   }
 }
 
-async function isAdmin(uid) {
+async function getUserRole(uid) {
   try {
     const snap = await admin.firestore().doc(`users/${uid}`).get();
-    if (!snap.exists) return false;
+    if (!snap.exists) return null;
     const d = snap.data();
-    return (d.role === "admin" || d.role === "superadmin") && d.disabled !== true;
-  } catch { return false; }
+    if (d.disabled === true) return null;
+    return d.role || null;
+  } catch { return null; }
 }
 
 async function isActiveUser(uid) {
-  try {
-    const snap = await admin.firestore().doc(`users/${uid}`).get();
-    return snap.exists && snap.data().disabled !== true;
-  } catch { return false; }
+  return (await getUserRole(uid)) !== null;
 }
 
-function requireAdmin(req, res, next) {
-  isAdmin(req.uid).then((ok) => (ok ? next() : res.status(403).json({ error: "Akses ditolak" })));
+async function hasWriteRole(uid, requiredRole) {
+  const role = await getUserRole(uid);
+  if (!role) return false;
+  if (requiredRole === "admin") return role === "admin" || role === "superadmin";
+  if (requiredRole === "editor") return ["admin", "superadmin", "editor"].includes(role);
+  return false;
 }
 
 function requireActiveUser(req, res, next) {
   isActiveUser(req.uid).then((ok) => (ok ? next() : res.status(403).json({ error: "Akses ditolak" })));
 }
 
-// ─── Rate limiter (per UID, per action, per jam) — sama pola dgn functions/index.js ──
+// ─── Rate limiter (per UID, per action, per jam) ─────────────────────────────
 async function checkRateLimit(uid, action, maxPerHour) {
   const ref = admin.firestore().doc(`rate_limits/${uid}_${action}`);
   const snap = await ref.get();
@@ -76,14 +93,18 @@ async function checkRateLimit(uid, action, maxPerHour) {
   return true;
 }
 
-// ─── Routes — pilot prefix inventori/ ────────────────────────────────────────
-app.post("/storage/upload-url", requireAuth, requireAdmin, async (req, res) => {
+// ─── Routes ───────────────────────────────────────────────────────────────
+app.post("/storage/upload-url", requireAuth, async (req, res) => {
   if (!(await checkRateLimit(req.uid, "s3_upload", 100))) {
     return res.status(429).json({ error: "Terlalu banyak permintaan, coba lagi nanti" });
   }
   const { path, contentType } = req.body || {};
-  if (!isPilotPath(path)) return res.status(400).json({ error: "Path tidak valid" });
-  if (!/^image\/(jpeg|png|webp)$/.test(contentType || "")) {
+  const rule = getRule(path);
+  if (!rule) return res.status(400).json({ error: "Path tidak valid" });
+  if (!(await hasWriteRole(req.uid, rule.writeRole))) {
+    return res.status(403).json({ error: "Akses ditolak" });
+  }
+  if (!rule.contentTypes.test(contentType || "")) {
     return res.status(400).json({ error: "Tipe file tidak valid" });
   }
   const url = await presignPut(s3, path, contentType, 120);
@@ -98,7 +119,7 @@ app.post("/storage/list-urls", requireAuth, requireActiveUser, async (req, res) 
   if (paths.length === 0) return res.json({ urls: {} });
   if (paths.length > 200) return res.status(400).json({ error: "Maks 200 path" });
   const entries = await Promise.all(paths.map(async (p) => {
-    if (!isPilotPath(p)) return [p, null];
+    if (!getRule(p)) return [p, null];
     try { return [p, await presignGet(s3, p, 3600)]; } catch { return [p, null]; }
   }));
   res.json({ urls: Object.fromEntries(entries) });
@@ -109,17 +130,21 @@ app.post("/storage/file-url", requireAuth, requireActiveUser, async (req, res) =
     return res.status(429).json({ error: "Terlalu banyak permintaan, coba lagi nanti" });
   }
   const { path } = req.body || {};
-  if (!isPilotPath(path)) return res.status(400).json({ error: "Path tidak valid" });
+  if (!getRule(path)) return res.status(400).json({ error: "Path tidak valid" });
   const url = await presignGet(s3, path, 60);
   res.json({ url });
 });
 
-app.post("/storage/delete", requireAuth, requireAdmin, async (req, res) => {
+app.post("/storage/delete", requireAuth, async (req, res) => {
   if (!(await checkRateLimit(req.uid, "s3_delete", 100))) {
     return res.status(429).json({ error: "Terlalu banyak permintaan, coba lagi nanti" });
   }
   const { path } = req.body || {};
-  if (!isPilotPath(path)) return res.status(400).json({ error: "Path tidak valid" });
+  const rule = getRule(path);
+  if (!rule) return res.status(400).json({ error: "Path tidak valid" });
+  if (!(await hasWriteRole(req.uid, rule.writeRole))) {
+    return res.status(403).json({ error: "Akses ditolak" });
+  }
   await deleteObject(s3, path);
   res.json({ ok: true });
 });
