@@ -4,34 +4,34 @@ import "leaflet/dist/leaflet.css";
 import { subscribe } from "../lib/rtdb";
 
 const ROOT = "monitoring/telemetri";
-const CENTER = [-7.5, 110.6];
+const CENTER = [-7.6, 112.3];
 const ZOOM = 8;
 const CARD_ZOOM = 8; // kartu tampil permanen mulai zoom ini ke atas
 const FRESH_MS = 15 * 60 * 1000;
 
-/* Slot posisi meniru layout mockup (ST-01..ST-20) sepanjang Pulau Jawa.
-   Stasiun (urut idStation) ditempatkan ke slot ini secara berurutan. */
+/* Koordinat stasiun ST-01..ST-20 (dari lapangan). Stasiun diurutkan by
+   idStation lalu ditempatkan ke slot ini berurutan. */
 const SLOTS = [
-  { name: "ST-01", at: [-6.75, 106.45] },
-  { name: "ST-02", at: [-6.40, 108.10] },
-  { name: "ST-03", at: [-6.75, 110.45] },
-  { name: "ST-04", at: [-6.85, 112.00] },
-  { name: "ST-05", at: [-7.30, 106.70] },
-  { name: "ST-06", at: [-7.20, 107.90] },
-  { name: "ST-07", at: [-7.55, 109.10] },
-  { name: "ST-08", at: [-7.80, 110.45] },
-  { name: "ST-09", at: [-7.60, 111.55] },
-  { name: "ST-10", at: [-6.85, 105.75] },
-  { name: "ST-11", at: [-7.60, 107.65] },
-  { name: "ST-12", at: [-7.70, 108.55] },
-  { name: "ST-13", at: [-7.90, 110.95] },
-  { name: "ST-14", at: [-8.05, 112.45] },
-  { name: "ST-15", at: [-7.85, 107.95] },
-  { name: "ST-16", at: [-7.95, 109.00] },
-  { name: "ST-17", at: [-8.10, 110.30] },
-  { name: "ST-18", at: [-8.20, 111.30] },
-  { name: "ST-19", at: [-8.35, 113.10] },
-  { name: "ST-20", at: [-7.75, 113.90] },
+  { name: "ST-01", at: [-6.708, 111.341] }, // Rembang / Pati, pesisir utara
+  { name: "ST-02", at: [-6.612, 110.885] }, // Jepara / Kudus, lereng Muria
+  { name: "ST-03", at: [-6.875, 112.285] }, // Tuban / Lamongan, Paciran-Brondong
+  { name: "ST-04", at: [-7.185, 112.742] }, // Surabaya Utara / Muara Kalimas
+  { name: "ST-05", at: [-7.525, 110.850] }, // Surakarta / Karanganyar, hulu Bengawan Solo
+  { name: "ST-06", at: [-7.150, 111.420] }, // Blora / Grobogan, Kali Lusi
+  { name: "ST-07", at: [-7.160, 111.950] }, // Bojonegoro / Lamongan, Bengawan Solo hilir
+  { name: "ST-08", at: [-7.460, 112.480] }, // Mojokerto / Jombang, Brantas hilir / Porong
+  { name: "ST-09", at: [-7.680, 113.120] }, // Pasuruan / Probolinggo, pesisir utara
+  { name: "ST-10", at: [-7.920, 110.880] }, // Wonogiri / Gunungkidul, hulu Gajah Mungkur
+  { name: "ST-11", at: [-7.410, 111.450] }, // Ngawi / Madiun, Bengawan Madiun
+  { name: "ST-12", at: [-7.680, 112.020] }, // Nganjuk / Kediri, Brantas tengah
+  { name: "ST-13", at: [-7.820, 112.690] }, // Malang / Pasuruan, hulu Kali Porong
+  { name: "ST-14", at: [-7.980, 113.250] }, // Probolinggo / Lumajang, Ranu Klakah
+  { name: "ST-15", at: [-8.210, 111.090] }, // Pacitan, Teluk Pacitan / Muara Grindulu
+  { name: "ST-16", at: [-8.250, 111.720] }, // Trenggalek / Tulungagung, Prigi-Popoh
+  { name: "ST-17", at: [-8.360, 112.550] }, // Blitar / Malang Selatan, Sendangbiru
+  { name: "ST-18", at: [-8.350, 113.480] }, // Jember / Lumajang, Puger
+  { name: "ST-19", at: [-8.580, 114.280] }, // Banyuwangi Selatan, Teluk Grajagan
+  { name: "ST-20", at: [-8.120, 114.390] }, // Banyuwangi Utara / Ketapang
 ];
 
 /* Stasiun ke-21+ (di luar slot) disebar acak-deterministik di Jawa. */
@@ -135,8 +135,8 @@ export default function Peta() {
       let name = SLOTS[idx]?.name || id.slice(0, 8) + "…";
 
       if (lat == null || lon == null) {
-        if (SLOTS[idx]) { [lat, lon] = SLOTS[idx].at; approx = true; }
-        else { [lat, lon] = hashCoord(id); approx = true; }
+        if (SLOTS[idx]) { [lat, lon] = SLOTS[idx].at; } // koordinat lapangan
+        else { [lat, lon] = hashCoord(id); approx = true; } // stasiun ke-21+
       }
       seen.add(id);
       pts.push([lat, lon]);
@@ -203,7 +203,6 @@ export default function Peta() {
         <p>💧 Water Level (m)</p>
         <p>⚡ Tegangan Panel (V)</p>
         <p>🟢 Kualitas Air (pH)</p>
-        <p className="text-slate-500 mt-1">◦ posisi masih perkiraan (dummy)</p>
       </div>
 
       <div className="absolute top-3 right-3 z-[500] bg-slate-900/85 border border-slate-700 rounded-lg px-3 py-2 text-[11px] text-slate-300 pointer-events-none">

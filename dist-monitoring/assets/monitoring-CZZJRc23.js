@@ -60063,31 +60063,51 @@ function requireLeafletSrc() {
 var leafletSrcExports = requireLeafletSrc();
 const L$1 = /* @__PURE__ */ getDefaultExportFromCjs(leafletSrcExports);
 const ROOT = "monitoring/telemetri";
-const CENTER = [-7.5, 110.6];
+const CENTER = [-7.6, 112.3];
 const ZOOM = 8;
 const CARD_ZOOM = 8;
 const FRESH_MS = 15 * 60 * 1e3;
 const SLOTS = [
-  { name: "ST-01", at: [-6.75, 106.45] },
-  { name: "ST-02", at: [-6.4, 108.1] },
-  { name: "ST-03", at: [-6.75, 110.45] },
-  { name: "ST-04", at: [-6.85, 112] },
-  { name: "ST-05", at: [-7.3, 106.7] },
-  { name: "ST-06", at: [-7.2, 107.9] },
-  { name: "ST-07", at: [-7.55, 109.1] },
-  { name: "ST-08", at: [-7.8, 110.45] },
-  { name: "ST-09", at: [-7.6, 111.55] },
-  { name: "ST-10", at: [-6.85, 105.75] },
-  { name: "ST-11", at: [-7.6, 107.65] },
-  { name: "ST-12", at: [-7.7, 108.55] },
-  { name: "ST-13", at: [-7.9, 110.95] },
-  { name: "ST-14", at: [-8.05, 112.45] },
-  { name: "ST-15", at: [-7.85, 107.95] },
-  { name: "ST-16", at: [-7.95, 109] },
-  { name: "ST-17", at: [-8.1, 110.3] },
-  { name: "ST-18", at: [-8.2, 111.3] },
-  { name: "ST-19", at: [-8.35, 113.1] },
-  { name: "ST-20", at: [-7.75, 113.9] }
+  { name: "ST-01", at: [-6.708, 111.341] },
+  // Rembang / Pati, pesisir utara
+  { name: "ST-02", at: [-6.612, 110.885] },
+  // Jepara / Kudus, lereng Muria
+  { name: "ST-03", at: [-6.875, 112.285] },
+  // Tuban / Lamongan, Paciran-Brondong
+  { name: "ST-04", at: [-7.185, 112.742] },
+  // Surabaya Utara / Muara Kalimas
+  { name: "ST-05", at: [-7.525, 110.85] },
+  // Surakarta / Karanganyar, hulu Bengawan Solo
+  { name: "ST-06", at: [-7.15, 111.42] },
+  // Blora / Grobogan, Kali Lusi
+  { name: "ST-07", at: [-7.16, 111.95] },
+  // Bojonegoro / Lamongan, Bengawan Solo hilir
+  { name: "ST-08", at: [-7.46, 112.48] },
+  // Mojokerto / Jombang, Brantas hilir / Porong
+  { name: "ST-09", at: [-7.68, 113.12] },
+  // Pasuruan / Probolinggo, pesisir utara
+  { name: "ST-10", at: [-7.92, 110.88] },
+  // Wonogiri / Gunungkidul, hulu Gajah Mungkur
+  { name: "ST-11", at: [-7.41, 111.45] },
+  // Ngawi / Madiun, Bengawan Madiun
+  { name: "ST-12", at: [-7.68, 112.02] },
+  // Nganjuk / Kediri, Brantas tengah
+  { name: "ST-13", at: [-7.82, 112.69] },
+  // Malang / Pasuruan, hulu Kali Porong
+  { name: "ST-14", at: [-7.98, 113.25] },
+  // Probolinggo / Lumajang, Ranu Klakah
+  { name: "ST-15", at: [-8.21, 111.09] },
+  // Pacitan, Teluk Pacitan / Muara Grindulu
+  { name: "ST-16", at: [-8.25, 111.72] },
+  // Trenggalek / Tulungagung, Prigi-Popoh
+  { name: "ST-17", at: [-8.36, 112.55] },
+  // Blitar / Malang Selatan, Sendangbiru
+  { name: "ST-18", at: [-8.35, 113.48] },
+  // Jember / Lumajang, Puger
+  { name: "ST-19", at: [-8.58, 114.28] },
+  // Banyuwangi Selatan, Teluk Grajagan
+  { name: "ST-20", at: [-8.12, 114.39] }
+  // Banyuwangi Utara / Ketapang
 ];
 const JAVA = { latMin: -8.4, latMax: -6.3, lonMin: 106, lonMax: 114.3 };
 function hashCoord(id) {
@@ -60173,7 +60193,6 @@ function Peta() {
       if (lat == null || lon == null) {
         if (SLOTS[idx]) {
           [lat, lon] = SLOTS[idx].at;
-          approx = true;
         } else {
           [lat, lon] = hashCoord(id);
           approx = true;
@@ -60243,8 +60262,7 @@ function Peta() {
       /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "font-semibold text-slate-200 mb-1", children: "KETERANGAN" }),
       /* @__PURE__ */ jsxRuntimeExports.jsx("p", { children: "💧 Water Level (m)" }),
       /* @__PURE__ */ jsxRuntimeExports.jsx("p", { children: "⚡ Tegangan Panel (V)" }),
-      /* @__PURE__ */ jsxRuntimeExports.jsx("p", { children: "🟢 Kualitas Air (pH)" }),
-      /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-slate-500 mt-1", children: "◦ posisi masih perkiraan (dummy)" })
+      /* @__PURE__ */ jsxRuntimeExports.jsx("p", { children: "🟢 Kualitas Air (pH)" })
     ] }),
     /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "absolute top-3 right-3 z-[500] bg-slate-900/85 border border-slate-700 rounded-lg px-3 py-2 text-[11px] text-slate-300 pointer-events-none", children: "Zoom out jauh untuk sembunyikan kartu · klik titik untuk detail" })
   ] });
