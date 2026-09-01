@@ -13,6 +13,11 @@
         "monitoring": [
           "adytia-monitoring"
         ]
+      },
+      "database": {
+        "adytia-pt-default-rtdb": [
+          "adytia-pt-default-rtdb"
+        ]
       }
     }
   },
