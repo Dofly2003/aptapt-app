@@ -14,12 +14,12 @@ admin.initializeApp({
     "https://adytia-pt-default-rtdb.asia-southeast1.firebasedatabase.app",
 });
 
-admin
-  .database()
-  .ref("monitoring/kualitas-air")
-  .remove()
+Promise.all([
+  admin.database().ref("monitoring/kualitas-air").remove(),
+  admin.database().ref("monitoring/telemetri").remove(),
+])
   .then(() => {
-    console.log("OK: monitoring/kualitas-air dihapus.");
+    console.log("OK: monitoring/kualitas-air + monitoring/telemetri dihapus.");
     process.exit(0);
   })
   .catch((e) => {

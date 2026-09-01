@@ -5,57 +5,70 @@ import { subscribe, todayStr, logToRows } from "../lib/rtdb";
 import DevicePicker from "../components/DevicePicker";
 import TimeChart from "../components/TimeChart";
 
-const ROOT = "monitoring/kualitas-air";
-
-/* Parameter kualitas air. Satuan = asumsi, cocokkan dengan sensor terpasang. */
-const PARAMS = [
-  { key: "ph", label: "pH", unit: "", color: "#22c55e", dp: 2 },
-  { key: "do", label: "DO", unit: "mg/L", color: "#38bdf8", dp: 2 },
-  { key: "conductivity", label: "Konduktivitas", unit: "mS/cm", color: "#f59e0b", dp: 3 },
-  { key: "turbidity", label: "Kekeruhan", unit: "NTU", color: "#a855f7", dp: 2 },
-  { key: "temp", label: "Suhu", unit: "°C", color: "#ef4444", dp: 1 },
-];
-
-const TABLE_DAYS = 10; // kolom tabel + periode rata-rata
+const ROOT = "monitoring/telemetri";
+const TABLE_DAYS = 10;
 const HOURS = Array.from({ length: 24 }, (_, i) => String(i).padStart(2, "0"));
+const COLORS = ["#22c55e", "#38bdf8", "#f59e0b", "#a855f7", "#ef4444", "#14b8a6", "#eab308", "#0ea5e9", "#6366f1", "#ec4899"];
+
+/* Label & satuan untuk field yang dikenal. Field lain tampil apa adanya. */
+const META = {
+  ph: { label: "pH", unit: "", dp: 2 },
+  do: { label: "DO", unit: "mg/L", dp: 2 },
+  conductivity: { label: "Konduktivitas", unit: "µS/cm", dp: 3 },
+  turbidity: { label: "Kekeruhan", unit: "NTU", dp: 2 },
+  logTemp: { label: "Suhu", unit: "°C", dp: 1 },
+  logHumid: { label: "Kelembapan", unit: "%", dp: 0 },
+  vcc: { label: "Suplai", unit: "V", dp: 1 },
+  level: { label: "Ketinggian", unit: "cm", dp: 1 },
+  water_level: { label: "Ketinggian", unit: "cm", dp: 1 },
+  wlevel: { label: "Ketinggian", unit: "cm", dp: 1 },
+  level_cm: { label: "Ketinggian", unit: "cm", dp: 1 },
+  elevation: { label: "Elevasi", unit: "m", dp: 2 },
+  debit: { label: "Debit", unit: "m³/s", dp: 2 },
+};
+const metaFor = (key, i) => ({
+  key,
+  label: META[key]?.label || key,
+  unit: META[key]?.unit ?? "",
+  dp: META[key]?.dp ?? 2,
+  color: COLORS[i % COLORS.length],
+});
 
 /* geser tanggal "YYYY-MM-DD" sebanyak n hari */
 function shiftDate(str, n) {
   const [y, m, d] = str.split("-").map(Number);
-  const dt = new Date(y, m - 1, d + n);
-  return todayStr(dt);
+  return todayStr(new Date(y, m - 1, d + n));
+}
+
+/* field angka pada sebuah objek /live (buang meta non-numerik) */
+function numericKeys(obj) {
+  if (!obj) return [];
+  return Object.keys(obj).filter(
+    (k) => k !== "ts" && typeof obj[k] === "number" && Number.isFinite(obj[k])
+  );
 }
 
 export default function KualitasAir() {
-  // Device diambil LANGSUNG dari node data (tanpa perlu daftar di monitoring/devices).
   const [devices, setDevices] = useState([]);
   const [loading, setLoading] = useState(true);
   const [deviceId, setDeviceId] = useState("");
   const [date, setDate] = useState(todayStr());
-  const [param, setParam] = useState("ph");
+  const [param, setParam] = useState("");
   const [live, setLive] = useState(null);
-  const [rows, setRows] = useState([]); // sampel hari terpilih
-  const [grid, setGrid] = useState({}); // { "YYYY-MM-DD": [{time, <param>}], ... }
+  const [rows, setRows] = useState([]);
+  const [grid, setGrid] = useState({});
 
   const device = devices.find((d) => d.id === deviceId) || devices[0];
-  const P = PARAMS.find((p) => p.key === param);
-  const fmt = (v) => (v == null || Number.isNaN(v) ? "–" : Number(v).toFixed(P.dp));
 
-  // daftar stasiun = anak-anak node monitoring/kualitas-air yang punya
-  // minimal satu parameter kualitas air di /live (buang sisa node non-WQMS).
+  // daftar stasiun = seluruh anak node monitoring/telemetri yang sudah punya /live
   useEffect(() => {
     return subscribe(ROOT, (val) => {
       const list = Object.entries(val || {})
-        .filter(([, node]) => {
-          const lv = node?.live || {};
-          return ["ph", "do", "conductivity", "turbidity"].some((k) => lv[k] != null);
+        .filter(([, node]) => numericKeys(node?.live).length > 0)
+        .map(([id, node]) => {
+          const g = node.live.group || "";
+          return { id, group: g, name: `${g ? g + " · " : ""}${id.slice(0, 12)}` };
         })
-        .map(([id, node]) => ({
-          id,
-          name: node?.live?.group
-            ? `${node.live.group} · ${id.slice(0, 8)}`
-            : id.slice(0, 16),
-        }))
         .sort((a, b) => a.name.localeCompare(b.name));
       setDevices(list);
       setLoading(false);
@@ -68,30 +81,30 @@ export default function KualitasAir() {
 
   const basePath = device ? `${ROOT}/${device.id}` : null;
 
-  // nilai realtime terakhir
+  // nilai realtime
   useEffect(() => {
     if (!basePath) return;
     return subscribe(`${basePath}/live`, setLive);
   }, [basePath]);
 
-  // sampel hari terpilih (untuk grafik + tertinggi/terendah)
+  // parameter yang tersedia pada stasiun ini (dari /live)
+  const paramKeys = useMemo(() => numericKeys(live), [live]);
+  useEffect(() => {
+    if (paramKeys.length && !paramKeys.includes(param)) setParam(paramKeys[0]);
+  }, [paramKeys, param]);
+
+  const P = metaFor(param || paramKeys[0] || "", Math.max(0, paramKeys.indexOf(param)));
+  const fmt = (v) => (v == null || Number.isNaN(v) ? "–" : Number(v).toFixed(P.dp));
+
+  // sampel hari terpilih
   useEffect(() => {
     if (!basePath) return;
     return subscribe(`${basePath}/log/${date}`, (val) => {
-      setRows(
-        logToRows(val, (e, time) => ({
-          time: time.slice(0, 5),
-          ph: e.ph ?? null,
-          do: e.do ?? null,
-          conductivity: e.conductivity ?? null,
-          turbidity: e.turbidity ?? null,
-          temp: e.temp ?? null,
-        }))
-      );
+      setRows(logToRows(val, (e, time) => ({ time: time.slice(0, 5), ...e })));
     });
   }, [basePath, date]);
 
-  // TABLE_DAYS hari terakhir (sekali ambil, untuk tabel + rata-rata periode)
+  // 10 hari terakhir untuk tabel + rata-rata periode
   useEffect(() => {
     if (!basePath) return;
     let cancelled = false;
@@ -105,16 +118,8 @@ export default function KualitasAir() {
     ).then((pairs) => {
       if (cancelled) return;
       const g = {};
-      for (const [d, node] of pairs) {
-        g[d] = logToRows(node, (e, time) => ({
-          time: time.slice(0, 5),
-          ph: e.ph ?? null,
-          do: e.do ?? null,
-          conductivity: e.conductivity ?? null,
-          turbidity: e.turbidity ?? null,
-          temp: e.temp ?? null,
-        }));
-      }
+      for (const [d, node] of pairs)
+        g[d] = logToRows(node, (e, time) => ({ time: time.slice(0, 5), ...e }));
       setGrid(g);
     });
     return () => { cancelled = true; };
@@ -137,7 +142,6 @@ export default function KualitasAir() {
   const current = live?.[param] ?? null;
   const days = Array.from({ length: TABLE_DAYS }, (_, i) => shiftDate(date, -(TABLE_DAYS - 1 - i)));
 
-  // tabel: per hari & jam -> sampel terakhir pada jam itu
   const cell = (d, hh) => {
     const list = (grid[d] || []).filter((r) => r.time.startsWith(hh));
     if (!list.length) return { t: "--:--", v: "-" };
@@ -149,7 +153,7 @@ export default function KualitasAir() {
   if (!device)
     return (
       <p className="text-slate-400">
-        Belum ada data stasiun di <code>{ROOT}</code>. Pastikan bridge WQMS di server sudah mengirim data.
+        Belum ada data stasiun di <code>{ROOT}</code>. Pastikan bridge di server sudah mengirim data.
       </p>
     );
 
@@ -171,28 +175,32 @@ export default function KualitasAir() {
         >
           Next ▶
         </button>
-        <span className="text-xs text-slate-500 ml-2">{device.name}</span>
+        <span className="text-xs text-slate-500 ml-2">
+          {device.name} · {devices.length} stasiun
+        </span>
       </div>
 
-      {/* pemilih parameter */}
+      {/* pemilih parameter — dinamis per stasiun */}
       <div className="flex flex-wrap gap-1.5 mb-5">
-        {PARAMS.map((p) => (
-          <button
-            key={p.key}
-            onClick={() => setParam(p.key)}
-            className={`px-3 py-1.5 rounded-lg text-sm font-semibold transition border ${
-              param === p.key
-                ? "bg-yellow-400 text-slate-900 border-yellow-400"
-                : "bg-slate-800 text-slate-300 border-slate-700 hover:bg-slate-700"
-            }`}
-          >
-            {p.label}
-          </button>
-        ))}
+        {paramKeys.map((k, i) => {
+          const mp = metaFor(k, i);
+          return (
+            <button
+              key={k}
+              onClick={() => setParam(k)}
+              className={`px-3 py-1.5 rounded-lg text-sm font-semibold transition border ${
+                param === k
+                  ? "bg-yellow-400 text-slate-900 border-yellow-400"
+                  : "bg-slate-800 text-slate-300 border-slate-700 hover:bg-slate-700"
+              }`}
+            >
+              {mp.label}
+            </button>
+          );
+        })}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-[300px_1fr] gap-5 mb-6">
-        {/* kartu angka besar ala referensi */}
         <div className="rounded-2xl overflow-hidden border border-slate-700 bg-slate-900">
           <div className="bg-slate-950 text-center text-xs text-slate-400 py-1.5">
             Update terakhir: {live?.terminalTime || (live?.ts ? new Date(live.ts).toLocaleString("id-ID") : "—")}
@@ -213,7 +221,7 @@ export default function KualitasAir() {
               <span>Rata-rata:</span>
               <span className="font-semibold">{fmt(periodAvg)} {P.unit}</span>
             </p>
-            {live?.vcc != null && (
+            {live?.vcc != null && param !== "vcc" && (
               <p className="text-slate-400 flex justify-between mt-1">
                 <span>Suplai:</span>
                 <span>{Number(live.vcc).toFixed(1)} V</span>
@@ -222,7 +230,6 @@ export default function KualitasAir() {
           </div>
         </div>
 
-        {/* grafik hari terpilih */}
         <TimeChart
           title={`DATA ${P.label.toUpperCase()} — ${device.name} (${date})`}
           data={rows.filter((r) => r[param] != null)}
@@ -230,7 +237,6 @@ export default function KualitasAir() {
         />
       </div>
 
-      {/* tabel per jam lintas hari */}
       <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-x-auto">
         <table className="text-xs w-full border-collapse">
           <thead>
@@ -269,7 +275,7 @@ export default function KualitasAir() {
       </div>
 
       <p className="text-[11px] text-slate-600 mt-3">
-        Satuan parameter masih asumsi (pH tanpa satuan, DO mg/L, Konduktivitas mS/cm, Kekeruhan NTU, Suhu °C) — sesuaikan bila perlu.
+        Parameter & satuan terdeteksi otomatis dari data tiap stasiun. Satuan untuk field yang belum dikenal ditampilkan kosong — lengkapi di <code>META</code> pada halaman ini.
       </p>
     </>
   );

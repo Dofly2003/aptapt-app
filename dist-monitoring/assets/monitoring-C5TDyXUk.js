@@ -50203,42 +50203,58 @@ function Ketinggian() {
     ] })
   ] });
 }
-const ROOT = "monitoring/kualitas-air";
-const PARAMS = [
-  { key: "ph", label: "pH", unit: "", color: "#22c55e", dp: 2 },
-  { key: "do", label: "DO", unit: "mg/L", color: "#38bdf8", dp: 2 },
-  { key: "conductivity", label: "Konduktivitas", unit: "mS/cm", color: "#f59e0b", dp: 3 },
-  { key: "turbidity", label: "Kekeruhan", unit: "NTU", color: "#a855f7", dp: 2 },
-  { key: "temp", label: "Suhu", unit: "°C", color: "#ef4444", dp: 1 }
-];
+const ROOT = "monitoring/telemetri";
 const TABLE_DAYS = 10;
 const HOURS = Array.from({ length: 24 }, (_, i) => String(i).padStart(2, "0"));
+const COLORS = ["#22c55e", "#38bdf8", "#f59e0b", "#a855f7", "#ef4444", "#14b8a6", "#eab308", "#0ea5e9", "#6366f1", "#ec4899"];
+const META = {
+  ph: { label: "pH", unit: "", dp: 2 },
+  do: { label: "DO", unit: "mg/L", dp: 2 },
+  conductivity: { label: "Konduktivitas", unit: "µS/cm", dp: 3 },
+  turbidity: { label: "Kekeruhan", unit: "NTU", dp: 2 },
+  logTemp: { label: "Suhu", unit: "°C", dp: 1 },
+  logHumid: { label: "Kelembapan", unit: "%", dp: 0 },
+  vcc: { label: "Suplai", unit: "V", dp: 1 },
+  level: { label: "Ketinggian", unit: "cm", dp: 1 },
+  water_level: { label: "Ketinggian", unit: "cm", dp: 1 },
+  wlevel: { label: "Ketinggian", unit: "cm", dp: 1 },
+  level_cm: { label: "Ketinggian", unit: "cm", dp: 1 },
+  elevation: { label: "Elevasi", unit: "m", dp: 2 },
+  debit: { label: "Debit", unit: "m³/s", dp: 2 }
+};
+const metaFor = (key, i) => ({
+  key,
+  label: META[key]?.label || key,
+  unit: META[key]?.unit ?? "",
+  dp: META[key]?.dp ?? 2,
+  color: COLORS[i % COLORS.length]
+});
 function shiftDate(str, n) {
   const [y2, m, d] = str.split("-").map(Number);
-  const dt = new Date(y2, m - 1, d + n);
-  return todayStr(dt);
+  return todayStr(new Date(y2, m - 1, d + n));
+}
+function numericKeys(obj) {
+  if (!obj) return [];
+  return Object.keys(obj).filter(
+    (k2) => k2 !== "ts" && typeof obj[k2] === "number" && Number.isFinite(obj[k2])
+  );
 }
 function KualitasAir() {
   const [devices, setDevices] = reactExports.useState([]);
   const [loading, setLoading] = reactExports.useState(true);
   const [deviceId, setDeviceId] = reactExports.useState("");
   const [date2, setDate] = reactExports.useState(todayStr());
-  const [param, setParam] = reactExports.useState("ph");
+  const [param, setParam] = reactExports.useState("");
   const [live, setLive] = reactExports.useState(null);
   const [rows, setRows] = reactExports.useState([]);
   const [grid, setGrid] = reactExports.useState({});
   const device = devices.find((d) => d.id === deviceId) || devices[0];
-  const P2 = PARAMS.find((p) => p.key === param);
-  const fmt = (v) => v == null || Number.isNaN(v) ? "–" : Number(v).toFixed(P2.dp);
   reactExports.useEffect(() => {
     return subscribe(ROOT, (val) => {
-      const list = Object.entries(val || {}).filter(([, node]) => {
-        const lv = node?.live || {};
-        return ["ph", "do", "conductivity", "turbidity"].some((k2) => lv[k2] != null);
-      }).map(([id, node]) => ({
-        id,
-        name: node?.live?.group ? `${node.live.group} · ${id.slice(0, 8)}` : id.slice(0, 16)
-      })).sort((a2, b) => a2.name.localeCompare(b.name));
+      const list = Object.entries(val || {}).filter(([, node]) => numericKeys(node?.live).length > 0).map(([id, node]) => {
+        const g = node.live.group || "";
+        return { id, group: g, name: `${g ? g + " · " : ""}${id.slice(0, 12)}` };
+      }).sort((a2, b) => a2.name.localeCompare(b.name));
       setDevices(list);
       setLoading(false);
     });
@@ -50251,19 +50267,16 @@ function KualitasAir() {
     if (!basePath) return;
     return subscribe(`${basePath}/live`, setLive);
   }, [basePath]);
+  const paramKeys = reactExports.useMemo(() => numericKeys(live), [live]);
+  reactExports.useEffect(() => {
+    if (paramKeys.length && !paramKeys.includes(param)) setParam(paramKeys[0]);
+  }, [paramKeys, param]);
+  const P2 = metaFor(param || paramKeys[0] || "", Math.max(0, paramKeys.indexOf(param)));
+  const fmt = (v) => v == null || Number.isNaN(v) ? "–" : Number(v).toFixed(P2.dp);
   reactExports.useEffect(() => {
     if (!basePath) return;
     return subscribe(`${basePath}/log/${date2}`, (val) => {
-      setRows(
-        logToRows(val, (e, time2) => ({
-          time: time2.slice(0, 5),
-          ph: e.ph ?? null,
-          do: e.do ?? null,
-          conductivity: e.conductivity ?? null,
-          turbidity: e.turbidity ?? null,
-          temp: e.temp ?? null
-        }))
-      );
+      setRows(logToRows(val, (e, time2) => ({ time: time2.slice(0, 5), ...e })));
     });
   }, [basePath, date2]);
   reactExports.useEffect(() => {
@@ -50277,16 +50290,8 @@ function KualitasAir() {
     ).then((pairs) => {
       if (cancelled2) return;
       const g = {};
-      for (const [d, node] of pairs) {
-        g[d] = logToRows(node, (e, time2) => ({
-          time: time2.slice(0, 5),
-          ph: e.ph ?? null,
-          do: e.do ?? null,
-          conductivity: e.conductivity ?? null,
-          turbidity: e.turbidity ?? null,
-          temp: e.temp ?? null
-        }));
-      }
+      for (const [d, node] of pairs)
+        g[d] = logToRows(node, (e, time2) => ({ time: time2.slice(0, 5), ...e }));
       setGrid(g);
     });
     return () => {
@@ -50318,7 +50323,7 @@ function KualitasAir() {
     return /* @__PURE__ */ jsxRuntimeExports.jsxs("p", { className: "text-slate-400", children: [
       "Belum ada data stasiun di ",
       /* @__PURE__ */ jsxRuntimeExports.jsx("code", { children: ROOT }),
-      ". Pastikan bridge WQMS di server sudah mengirim data."
+      ". Pastikan bridge di server sudah mengirim data."
     ] });
   return /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
     /* @__PURE__ */ jsxRuntimeExports.jsx(DevicePicker, { devices, deviceId: device.id, onDevice: setDeviceId, date: date2, onDate: setDate }),
@@ -50340,17 +50345,25 @@ function KualitasAir() {
           children: "Next ▶"
         }
       ),
-      /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-xs text-slate-500 ml-2", children: device.name })
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "text-xs text-slate-500 ml-2", children: [
+        device.name,
+        " · ",
+        devices.length,
+        " stasiun"
+      ] })
     ] }),
-    /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex flex-wrap gap-1.5 mb-5", children: PARAMS.map((p) => /* @__PURE__ */ jsxRuntimeExports.jsx(
-      "button",
-      {
-        onClick: () => setParam(p.key),
-        className: `px-3 py-1.5 rounded-lg text-sm font-semibold transition border ${param === p.key ? "bg-yellow-400 text-slate-900 border-yellow-400" : "bg-slate-800 text-slate-300 border-slate-700 hover:bg-slate-700"}`,
-        children: p.label
-      },
-      p.key
-    )) }),
+    /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex flex-wrap gap-1.5 mb-5", children: paramKeys.map((k2, i) => {
+      const mp = metaFor(k2, i);
+      return /* @__PURE__ */ jsxRuntimeExports.jsx(
+        "button",
+        {
+          onClick: () => setParam(k2),
+          className: `px-3 py-1.5 rounded-lg text-sm font-semibold transition border ${param === k2 ? "bg-yellow-400 text-slate-900 border-yellow-400" : "bg-slate-800 text-slate-300 border-slate-700 hover:bg-slate-700"}`,
+          children: mp.label
+        },
+        k2
+      );
+    }) }),
     /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "grid grid-cols-1 lg:grid-cols-[300px_1fr] gap-5 mb-6", children: [
       /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "rounded-2xl overflow-hidden border border-slate-700 bg-slate-900", children: [
         /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "bg-slate-950 text-center text-xs text-slate-400 py-1.5", children: [
@@ -50387,7 +50400,7 @@ function KualitasAir() {
               P2.unit
             ] })
           ] }),
-          live?.vcc != null && /* @__PURE__ */ jsxRuntimeExports.jsxs("p", { className: "text-slate-400 flex justify-between mt-1", children: [
+          live?.vcc != null && param !== "vcc" && /* @__PURE__ */ jsxRuntimeExports.jsxs("p", { className: "text-slate-400 flex justify-between mt-1", children: [
             /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "Suplai:" }),
             /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { children: [
               Number(live.vcc).toFixed(1),
@@ -50427,7 +50440,11 @@ function KualitasAir() {
         })
       ] }, hh)) })
     ] }) }),
-    /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-[11px] text-slate-600 mt-3", children: "Satuan parameter masih asumsi (pH tanpa satuan, DO mg/L, Konduktivitas mS/cm, Kekeruhan NTU, Suhu °C) — sesuaikan bila perlu." })
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("p", { className: "text-[11px] text-slate-600 mt-3", children: [
+      "Parameter & satuan terdeteksi otomatis dari data tiap stasiun. Satuan untuk field yang belum dikenal ditampilkan kosong — lengkapi di ",
+      /* @__PURE__ */ jsxRuntimeExports.jsx("code", { children: "META" }),
+      " pada halaman ini."
+    ] })
   ] });
 }
 function Shell({ children }) {
@@ -50436,9 +50453,9 @@ function Shell({ children }) {
     /* @__PURE__ */ jsxRuntimeExports.jsx("header", { className: "sticky top-0 z-10 bg-slate-950/80 backdrop-blur border-b border-slate-800", children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "max-w-6xl mx-auto px-4 py-3 flex items-center justify-between gap-3", children: [
       /* @__PURE__ */ jsxRuntimeExports.jsx("a", { href: "https://pt-adytia.com", className: "font-bold text-yellow-400 whitespace-nowrap", children: "PT. Adytia Putra Teknik" }),
       /* @__PURE__ */ jsxRuntimeExports.jsxs("nav", { className: "flex gap-1", children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx(NavLink, { to: "/stasiun", className: tab, children: "Stasiun" }),
         /* @__PURE__ */ jsxRuntimeExports.jsx(NavLink, { to: "/panel-daya", className: tab, children: "Panel Daya" }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx(NavLink, { to: "/ketinggian", className: tab, children: "Ketinggian" }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx(NavLink, { to: "/kualitas-air", className: tab, children: "Kualitas Air" })
+        /* @__PURE__ */ jsxRuntimeExports.jsx(NavLink, { to: "/ketinggian", className: tab, children: "Ketinggian" })
       ] })
     ] }) }),
     /* @__PURE__ */ jsxRuntimeExports.jsx("main", { className: "max-w-6xl mx-auto px-4 py-6", children })
@@ -50446,11 +50463,12 @@ function Shell({ children }) {
 }
 function App() {
   return /* @__PURE__ */ jsxRuntimeExports.jsx(BrowserRouter, { children: /* @__PURE__ */ jsxRuntimeExports.jsx(Shell, { children: /* @__PURE__ */ jsxRuntimeExports.jsxs(Routes, { children: [
-    /* @__PURE__ */ jsxRuntimeExports.jsx(Route, { path: "/", element: /* @__PURE__ */ jsxRuntimeExports.jsx(Navigate, { to: "/panel-daya", replace: true }) }),
+    /* @__PURE__ */ jsxRuntimeExports.jsx(Route, { path: "/", element: /* @__PURE__ */ jsxRuntimeExports.jsx(Navigate, { to: "/stasiun", replace: true }) }),
+    /* @__PURE__ */ jsxRuntimeExports.jsx(Route, { path: "/stasiun", element: /* @__PURE__ */ jsxRuntimeExports.jsx(KualitasAir, {}) }),
+    /* @__PURE__ */ jsxRuntimeExports.jsx(Route, { path: "/kualitas-air", element: /* @__PURE__ */ jsxRuntimeExports.jsx(Navigate, { to: "/stasiun", replace: true }) }),
     /* @__PURE__ */ jsxRuntimeExports.jsx(Route, { path: "/panel-daya", element: /* @__PURE__ */ jsxRuntimeExports.jsx(PanelDaya, {}) }),
     /* @__PURE__ */ jsxRuntimeExports.jsx(Route, { path: "/ketinggian", element: /* @__PURE__ */ jsxRuntimeExports.jsx(Ketinggian, {}) }),
-    /* @__PURE__ */ jsxRuntimeExports.jsx(Route, { path: "/kualitas-air", element: /* @__PURE__ */ jsxRuntimeExports.jsx(KualitasAir, {}) }),
-    /* @__PURE__ */ jsxRuntimeExports.jsx(Route, { path: "*", element: /* @__PURE__ */ jsxRuntimeExports.jsx(Navigate, { to: "/panel-daya", replace: true }) })
+    /* @__PURE__ */ jsxRuntimeExports.jsx(Route, { path: "*", element: /* @__PURE__ */ jsxRuntimeExports.jsx(Navigate, { to: "/stasiun", replace: true }) })
   ] }) }) });
 }
 clientExports.createRoot(document.getElementById("root")).render(

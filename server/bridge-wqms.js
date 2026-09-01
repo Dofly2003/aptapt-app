@@ -39,8 +39,8 @@ const OPTIONS = {
   reconnectPeriod: 1000,
   keepalive: 60,
 };
-// Broker ini dipakai BANYAK stasiun (AWLR level air, dll). Ambil cabang WQMS saja.
-const TOPIC = "data/wqms/#";
+// Terima SEMUA stasiun di broker (WQMS kualitas air, AWLR level air, dll).
+const TOPIC = "data/#";
 
 // ─── 3. Pemetaan idStation (dari alat) -> deviceId (di monitoring/devices)
 // Biarkan kosong -> pakai idStation apa adanya. Isi kalau id di RTDB beda.
@@ -48,25 +48,23 @@ const STATION_MAP = {
   // "278e44482bc0cd4255e21ee1a4c4e6e5": "bt01",
 };
 
-// Hanya proses idStation yang terdaftar di sini. Kosongkan Set -> terima semua
-// stasiun yang lolos filter topik + punya parameter kualitas air.
+// Hanya proses idStation yang terdaftar di sini. Kosongkan Set -> terima SEMUA stasiun.
 const STATION_ALLOW = new Set([
   // "278e44482bc0cd4255e21ee1a4c4e6e5",
-  // "826fec99fead5991d924d3583fb46f86",
 ]);
 
-// ─── 4. Petakan payload alat -> bentuk yang dibaca dashboard ─────────
-// Field alat berupa string -> dikonversi ke angka.
-function mapPayload(d) {
-  return {
-    ph: num(d.ph),
-    do: num(d.do),                 // dissolved oxygen (mg/L)
-    conductivity: num(d.conductivity),
-    turbidity: num(d.turbidity),   // NTU
-    temp: num(d.logTemp),          // suhu (deg C)
-    humid: num(d.logHumid),        // kelembapan enclosure (%)
-    vcc: num(d.vcc),               // tegangan suplai (V)
-  };
+// ─── 4. Ambil SEMUA field angka dari payload (nama field dipertahankan) ──
+// Field non-angka & yang berawalan "_" diabaikan. Dashboard mendeteksi
+// parameter yang tersedia per stasiun secara otomatis dari hasil ini.
+const SKIP_KEYS = new Set(["idStation", "id", "station"]);
+function extractNums(d) {
+  const out = {};
+  for (const [k, v] of Object.entries(d)) {
+    if (k.startsWith("_") || SKIP_KEYS.has(k)) continue;
+    const n = num(v);
+    if (n != null) out[k] = n;
+  }
+  return out;
 }
 
 // ─── util ────────────────────────────────────────────────────────────
@@ -136,21 +134,15 @@ client.on("message", async (topic, message) => {
     return; // stasiun tidak diizinkan — diam saja
   }
 
-  // Hanya payload yang benar-benar dari stasiun kualitas air (broker dipakai
-  // bareng AWLR/level air yg kadang kirim ph:"0" sebagai placeholder).
-  if (String(d._groupName || "").toUpperCase() !== "WQMS") {
-    return; // bukan stasiun WQMS — diam saja
-  }
-
   const deviceId = sanitizeKey(STATION_MAP[idStation] || idStation);
   const ts = Date.now();
   const { date, time } = resolveTime(d._terminalTime);
-  const base = `monitoring/kualitas-air/${deviceId}`;
-  const m = mapPayload(d);
+  const base = `monitoring/telemetri/${deviceId}`;
+  const nums = extractNums(d);
 
-  // Backstop: minimal satu parameter kualitas air terisi.
-  if ([m.ph, m.do, m.conductivity, m.turbidity].every((v) => v == null)) {
-    console.log(`[SKIP] ${idStation}: tanpa parameter kualitas air`);
+  // Lewati kalau tidak ada satu pun field angka (payload status/heartbeat).
+  if (!Object.keys(nums).length) {
+    console.log(`[SKIP] ${idStation}: tidak ada field angka`);
     return;
   }
 
@@ -161,7 +153,7 @@ client.on("message", async (topic, message) => {
 
     // a) nilai realtime terakhir -> DITIMPA
     await db.ref(`${base}/live`).set({
-      ...m,
+      ...nums,
       ts,
       terminalTime: d._terminalTime || null,
       group: d._groupName || null,
@@ -169,14 +161,10 @@ client.on("message", async (topic, message) => {
     });
 
     // b) riwayat -> DI-APPEND (key = jam:menit:detik pembacaan)
-    await db.ref(`${base}/log/${date}/${time}`).set({
-      ph: m.ph, do: m.do, conductivity: m.conductivity,
-      turbidity: m.turbidity, temp: m.temp, vcc: m.vcc,
-    });
+    await db.ref(`${base}/log/${date}/${time}`).set(nums);
 
-    console.log(
-      `[OK] ${deviceId}  ${date} ${time}  pH=${m.ph} DO=${m.do} EC=${m.conductivity} NTU=${m.turbidity} T=${m.temp}`
-    );
+    const preview = Object.entries(nums).slice(0, 5).map(([k, v]) => `${k}=${v}`).join(" ");
+    console.log(`[OK] ${d._groupName || "?"} ${deviceId}  ${date} ${time}  ${preview}`);
   } catch (err) {
     console.error(`[FIREBASE] Gagal tulis ${deviceId}:`, err.message);
   }

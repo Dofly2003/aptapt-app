@@ -1,7 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate, NavLink } from "react-router-dom";
 import PanelDaya from "./pages/PanelDaya";
 import Ketinggian from "./pages/Ketinggian";
-import KualitasAir from "./pages/KualitasAir";
+import Stasiun from "./pages/KualitasAir";
 
 function Shell({ children }) {
   const tab = ({ isActive }) =>
@@ -17,9 +17,9 @@ function Shell({ children }) {
             PT. Adytia Putra Teknik
           </a>
           <nav className="flex gap-1">
+            <NavLink to="/stasiun" className={tab}>Stasiun</NavLink>
             <NavLink to="/panel-daya" className={tab}>Panel Daya</NavLink>
             <NavLink to="/ketinggian" className={tab}>Ketinggian</NavLink>
-            <NavLink to="/kualitas-air" className={tab}>Kualitas Air</NavLink>
           </nav>
         </div>
       </header>
@@ -33,11 +33,12 @@ export default function App() {
     <BrowserRouter>
       <Shell>
         <Routes>
-          <Route path="/" element={<Navigate to="/panel-daya" replace />} />
+          <Route path="/" element={<Navigate to="/stasiun" replace />} />
+          <Route path="/stasiun" element={<Stasiun />} />
+          <Route path="/kualitas-air" element={<Navigate to="/stasiun" replace />} />
           <Route path="/panel-daya" element={<PanelDaya />} />
           <Route path="/ketinggian" element={<Ketinggian />} />
-          <Route path="/kualitas-air" element={<KualitasAir />} />
-          <Route path="*" element={<Navigate to="/panel-daya" replace />} />
+          <Route path="*" element={<Navigate to="/stasiun" replace />} />
         </Routes>
       </Shell>
     </BrowserRouter>

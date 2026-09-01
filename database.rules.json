@@ -24,6 +24,9 @@
       },
       "kualitas-air": {
         "$deviceId": { ".write": false }
+      },
+      "telemetri": {
+        "$deviceId": { ".write": false }
       }
     },
 
