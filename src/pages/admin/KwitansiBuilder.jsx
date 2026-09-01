@@ -5,10 +5,11 @@ import {
   FileText, User, AlignLeft, Banknote, MapPin, PenLine,
 } from "lucide-react";
 import { useReactToPrint } from "react-to-print";
+import { inlineImgsForPrint } from "../../utils/inlineImgsForPrint";
 import { AuthContext } from "../../context/AuthContext";
 import {
   getAllDokumen, getDokumen, createDokumen, updateDokumen,
-  formatRupiah, hitungTotal, suggestNomorKwitansi,
+  formatRupiah, hitungTotalFromDoc, suggestNomorKwitansi,
 } from "../../services/rabService";
 import { getSettings } from "../../services/contentService";
 import { getAllInstansi } from "../../services/instansiService";
@@ -145,7 +146,7 @@ export default function KwitansiBuilder() {
   const handleSelectInvoice = (invoiceId) => {
     const inv = invoices.find(i => i.id === invoiceId);
     if (!inv) { set("invoiceId", ""); return; }
-    const total = hitungTotal(inv.items || [], inv.ppnAktif !== false).grandTotal;
+    const total = hitungTotalFromDoc(inv).grandTotal;
     setForm(f => ({
       ...f,
       invoiceId: inv.id,
@@ -201,9 +202,18 @@ export default function KwitansiBuilder() {
     finally { setSaving(false); }
   };
 
+  const restoreImgs = useRef(null);
+
   const handlePrint = useReactToPrint({
     contentRef: printRef,
     documentTitle: `Kwitansi-${form.nomor || "dokumen"}`,
+    onBeforePrint: async () => {
+      if (printRef.current) restoreImgs.current = await inlineImgsForPrint(printRef.current);
+    },
+    onAfterPrint: () => {
+      restoreImgs.current?.();
+      restoreImgs.current = null;
+    },
     pageStyle: `
       @page { size: A4 portrait; margin: 0; }
       @media print {

@@ -17,7 +17,6 @@ const SEKUNDER_ROWS = [
   { key: "rg", label: "R–G" },
   { key: "sg", label: "S–G" },
   { key: "tg", label: "T–G" },
-  { key: "ng", label: "N–G", highlight: true },
   { key: "rs", label: "R–S", interphase: true },
   { key: "st", label: "S–T", interphase: true },
   { key: "tr", label: "T–R", interphase: true },

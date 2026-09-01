@@ -8,7 +8,9 @@ import {
     deleteDoc,
     doc,
     getDocs,
-    updateDoc
+    updateDoc,
+    query,
+    limit
 } from "firebase/firestore";
 import { useNavigate } from "react-router-dom";
 import ConfirmModal from "../../components/ConfirmModal";
@@ -28,7 +30,7 @@ function MobileNotes() {
     /* ================= REALTIME ================= */
     useEffect(() => {
         const unsub = onSnapshot(
-            collection(db, "technician_notes"),
+            query(collection(db, "technician_notes"), limit(200)),
             (snap) => {
                 const data = snap.docs.map((doc) => ({
                     id: doc.id,

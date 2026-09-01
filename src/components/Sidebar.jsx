@@ -1,5 +1,5 @@
 import { Link, useLocation } from "react-router-dom";
-import { useContext, useState, useEffect, useRef } from "react";
+import React, { useContext, useState, useEffect, useRef } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { AuthContext } from "../context/AuthContext";
 import { usePendingApprovalsCount } from "../hooks/usePendingApprovalsCount";
@@ -7,7 +7,7 @@ import {
   LayoutDashboard, Receipt, Users, LayoutTemplate, ChevronDown, ChevronRight, X,
   Building2, Wallet, UserSquare2, ShoppingCart, Package, Factory,
   ShoppingBag, FolderKanban, Wrench, FileText, ClipboardList, ShieldCheck, ClipboardCheck,
-  Award, FolderUp, CalendarDays, Bell, FileOutput,
+  Award, FolderUp, CalendarDays, Bell, FileOutput, Tag, BarChart2, ZoomOut, Hammer, Gauge,
 } from "lucide-react";
 
 function NavSection({ label, children }) {
@@ -54,6 +54,7 @@ function Sidebar({ closeSidebar }) {
   const [openPenjualan, setOpenPenjualan] = useState(false);
   const [openAset,    setOpenAset]    = useState(false);
   const [openProyek,  setOpenProyek]  = useState(false);
+  const [openTools,   setOpenTools]   = useState(false);
   const navRef = useRef(null);
 
   // Restore scroll on mount (sidebar remounts on every navigation due to AnimatedRoutes key)
@@ -76,8 +77,9 @@ function Sidebar({ closeSidebar }) {
   useEffect(() => {
     const p = location.pathname;
     setOpenNidi(p.includes("/nidi") || p.includes("/landing/edukasi") || p.includes("/settings/payment") || p.includes("/settings/company"));
+    /* laik-operasi termasuk bagian Dokumen — tidak perlu collapse, langsung link */
     setOpenLanding(p.includes("/landing") || p.includes("/landing/settings"));
-    setOpenKeuangan(p.includes("/keuangan"));
+    setOpenKeuangan(p.includes("/keuangan") || p.includes("/kasbon"));
     setOpenSdm(p.includes("/sdm"));
     setOpenPengadaan(p.includes("/pengadaan"));
     setOpenInventori(p.includes("/inventori"));
@@ -85,6 +87,7 @@ function Sidebar({ closeSidebar }) {
     setOpenPenjualan(p.includes("/penjualan"));
     setOpenAset(p.includes("/aset"));
     setOpenProyek(p.includes("/proyek"));
+    setOpenTools(p.includes("/dokumen/compress-pdf") || p.includes("/dokumen/pdf-to-word"));
   }, [location.pathname]);
 
   const isActive = (path) => location.pathname === path;
@@ -168,6 +171,16 @@ function Sidebar({ closeSidebar }) {
                 <Receipt size={16} /> RAB / Penawaran
               </Link>
             )}
+            {isAdmin && (
+              <Link to={link("/laik-operasi")} className={menuClass(link("/laik-operasi"))}>
+                <ClipboardList size={16} /> Laik Operasi
+              </Link>
+            )}
+            {isAdmin && (
+              <Link to={link("/master-harga")} className={menuClass(link("/master-harga"))}>
+                <Tag size={16} /> Master Harga
+              </Link>
+            )}
             {(isAdmin || guestCan("instansi")) && (
               <Link to={link("/instansi")} className={menuClass(link("/instansi"))}>
                 <Building2 size={16} /> Instansi
@@ -181,11 +194,6 @@ function Sidebar({ closeSidebar }) {
             {(isAdmin || guestCan("invoice")) && (
               <Link to="/dashboard/invoice" className={menuClass("/dashboard/invoice")}>
                 <FileText size={16} /> Invoice Builder
-              </Link>
-            )}
-            {isAdmin && (
-              <Link to={link("/dokumen/pdf-to-word")} className={menuClass(link("/dokumen/pdf-to-word"))}>
-                <FileOutput size={16} /> PDF ke Word
               </Link>
             )}
           </NavSection>
@@ -204,6 +212,23 @@ function Sidebar({ closeSidebar }) {
               <Link to={link("/keuangan/piutang")}   className={subClass(link("/keuangan/piutang"))}>Akun Diterima (AR)</Link>
               <Link to={link("/keuangan/anggaran")}  className={subClass(link("/keuangan/anggaran"))}>Anggaran</Link>
               <Link to={link("/keuangan/arus-kas")}  className={subClass(link("/keuangan/arus-kas"))}>Arus Kas</Link>
+              <Link to={link("/kasbon")}             className={subClass(link("/kasbon"))}>Arus Kas User</Link>
+            </CollapseMenu>
+          </NavSection>
+        )}
+
+        
+        {/* ── PROYEK ── */}
+        {(isAdmin || (isGuest && guestCan("proyek"))) && (
+          <NavSection label="Proyek">
+            <CollapseMenu
+              icon={<FolderKanban size={16} />} label="Proyek"
+              open={openProyek} onToggle={() => setOpenProyek(v => !v)}
+            >
+              <Link to={link("/proyek/daftar")}  className={subClass(link("/proyek/daftar"))}>Manajemen Proyek</Link>
+              <Link to={link("/proyek/jadwal")}  className={subClass(link("/proyek/jadwal"))}>
+                <CalendarDays size={12} /> Jadwal Tim
+              </Link>
             </CollapseMenu>
           </NavSection>
         )}
@@ -283,20 +308,6 @@ function Sidebar({ closeSidebar }) {
           </NavSection>
         )}
 
-        {/* ── PROYEK ── */}
-        {(isAdmin || (isGuest && guestCan("proyek"))) && (
-          <NavSection label="Proyek">
-            <CollapseMenu
-              icon={<FolderKanban size={16} />} label="Proyek"
-              open={openProyek} onToggle={() => setOpenProyek(v => !v)}
-            >
-              <Link to={link("/proyek/daftar")}  className={subClass(link("/proyek/daftar"))}>Manajemen Proyek</Link>
-              <Link to={link("/proyek/jadwal")}  className={subClass(link("/proyek/jadwal"))}>
-                <CalendarDays size={12} /> Jadwal Tim
-              </Link>
-            </CollapseMenu>
-          </NavSection>
-        )}
 
         {/* ── ASET & MAINTENANCE ── */}
         {(isAdmin || (isGuest && guestCan("aset"))) && (
@@ -346,6 +357,23 @@ function Sidebar({ closeSidebar }) {
           </NavSection>
         )}
 
+        {/* ── TOOLS ── */}
+        {isAdmin && (
+          <NavSection label="Tools">
+            <CollapseMenu
+              icon={<Hammer size={16} />} label="PDF Tools"
+              open={openTools} onToggle={() => setOpenTools(v => !v)}
+            >
+              <Link to={link("/dokumen/compress-pdf")} className={subClass(link("/dokumen/compress-pdf"))}>
+                <ZoomOut size={12} /> Kompres PDF
+              </Link>
+              <Link to={link("/dokumen/pdf-to-word")} className={subClass(link("/dokumen/pdf-to-word"))}>
+                <FileOutput size={12} /> PDF ke Word
+              </Link>
+            </CollapseMenu>
+          </NavSection>
+        )}
+
         {/* ── SYSTEM ── */}
         {(isSuperadmin || isAdmin) && (
           <NavSection label="System">
@@ -357,6 +385,16 @@ function Sidebar({ closeSidebar }) {
             {isSuperadmin && (
               <Link to={link("/guest-accounts")} className={menuClass(link("/guest-accounts"))}>
                 <ShieldCheck size={16} /> Akun Tamu
+              </Link>
+            )}
+            {isSuperadmin && (
+              <Link to={link("/analytics")} className={menuClass(link("/analytics"))}>
+                <BarChart2 size={16} /> Analytics
+              </Link>
+            )}
+            {isAdmin && (
+              <Link to={link("/monitoring")} className={menuClass(link("/monitoring"))}>
+                <Gauge size={16} /> Monitoring
               </Link>
             )}
             <Link to={link("/guest-approvals")} className={`${menuClass(link("/guest-approvals"))} justify-between`}>
@@ -383,4 +421,4 @@ function Sidebar({ closeSidebar }) {
   );
 }
 
-export default Sidebar;
+export default React.memo(Sidebar);

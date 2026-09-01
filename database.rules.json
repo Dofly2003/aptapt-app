@@ -1,0 +1,32 @@
+{
+  "rules": {
+    "panel1": {
+      ".read": true,
+      ".write": false
+    },
+
+    "monitoring": {
+      ".read": true,
+
+      "devices": {
+        ".write": "auth != null && (root.child('users').child(auth.uid).child('role').val() == 'admin' || root.child('users').child(auth.uid).child('role').val() == 'superadmin')",
+        "$deviceId": {
+          ".validate": "newData.hasChildren(['name', 'type'])",
+          "type": { ".validate": "newData.val() == 'panel-daya' || newData.val() == 'ketinggian'" }
+        }
+      },
+
+      "panel-daya": {
+        "$deviceId": { ".write": false }
+      },
+      "ketinggian": {
+        "$deviceId": { ".write": false }
+      }
+    },
+
+    "$other": {
+      ".read": false,
+      ".write": false
+    }
+  }
+}

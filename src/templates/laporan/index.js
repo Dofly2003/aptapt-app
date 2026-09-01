@@ -11,6 +11,7 @@ import TemplateAdytia from "./TemplateAdytia";
  */
 export const TEMPLATES = {
   adytia: { component: TemplateAdytia, label: "Adytia (Internal)", pdfMode: "lhpp" },
+  ajs: { component: TemplateAdytia, label: "AJS (Astra Jaya Sejahtera)", pdfMode: "lhpp" },
   // pln: { component: TemplatePLN, label: "PLN (Formal)" },
 };
 

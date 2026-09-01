@@ -4,7 +4,7 @@ import {
   ArrowLeft, RefreshCw, GripVertical, Trash2, Plus,
   Printer, CheckCircle, Save, ChevronDown, ChevronUp,
   FileText, User, MessageSquare, Building2,
-  AlertCircle, Eye, Copy, Lock, Send,
+  AlertCircle, Eye, Copy, Lock, Send, Tag, Search, X, Pencil,
 } from "lucide-react";
 import { useReactToPrint } from "react-to-print";
 import { AuthContext } from "../../context/AuthContext";
@@ -12,10 +12,14 @@ import { useGuestPermission } from "../../hooks/useGuestPermission";
 import { submitForApproval } from "../../services/guestService";
 import {
   createDokumen, updateDokumen, getDokumen, getAllDokumen, suggestNomor,
-  hitungTotal, formatRupiah, formatRupiahPlain,
-  newItem, SATUAN_OPTIONS, DEFAULT_CLOSING, DEFAULT_PEMBUKAAN, DEFAULT_MASA_BERLAKU,
+  hitungTotal, hitungSubtotalGroup, hitungTotalGroups,
+  formatRupiah, formatRupiahPlain, applyMarkup, MARKUP_PERCENT,
+  newItem, newGroup, SATUAN_OPTIONS, DEFAULT_CLOSING, DEFAULT_PEMBUKAAN, DEFAULT_MASA_BERLAKU,
 } from "../../services/rabService";
 import { getAllInstansi } from "../../services/instansiService";
+import { getAllMasterHarga } from "../../services/masterHargaService";
+import { getRabItemsAggregated } from "../../utils/aggregateRabItems";
+import { findTopMatches } from "../../utils/normalizeItemName";
 import {
   DndContext, closestCenter, PointerSensor, useSensor, useSensors,
 } from "@dnd-kit/core";
@@ -24,10 +28,11 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import TemplateRabAdytia from "../../templates/rab/TemplateRabAdytia";
+import { inlineImgsForPrint } from "../../utils/inlineImgsForPrint";
 
 const TODAY = () => new Date().toISOString().slice(0, 10);
 
-const EMPTY = {
+const makeEmpty = () => ({
   type: "rab",
   nomor: "",
   lampiran: "-",
@@ -37,14 +42,15 @@ const EMPTY = {
   lokasi: "",
   instansiId: "",
   ttd: null,
-  items: [newItem()],
+  showTTD: false,
+  groups: [newGroup("Daftar Pekerjaan")],
   ppnAktif: true,
   pembukaan: DEFAULT_PEMBUKAAN,
   closingMessage: DEFAULT_CLOSING.rab,
   masaBerlaku: DEFAULT_MASA_BERLAKU,
   catatan: "",
   status: "draft",
-};
+});
 
 const navy = "#003087";
 const gold = "#F59E0B";
@@ -59,15 +65,17 @@ export default function RabEditor() {
   const isReadOnly     = role === "guest" && rabPermission === "read";
   const needsApproval  = role === "guest" && rabPermission === "write_approval";
 
-  const [form, setForm]               = useState(EMPTY);
+  const [form, setForm]               = useState(makeEmpty);
   const [instansiList, setInstansiList] = useState([]);
+  const [priceHistoryList, setPriceHistoryList] = useState([]);
   const [loading, setLoading]         = useState(isEdit);
   const [saving, setSaving]           = useState(false);
   const [zoom, setZoom]               = useState(62);
   const [mTab, setMTab]               = useState("form");
   const [autoSaved, setAutoSaved]     = useState(false);
   const [toast, setToast]             = useState({ msg: "", on: false, err: false });
-  const [showCopyRab, setShowCopyRab] = useState(false);
+  const [showCopyRab, setShowCopyRab]         = useState(false);
+  const [showMasterHarga, setShowMasterHarga] = useState(false);
   const [openSec, setOpenSec]         = useState({
     surat: true, letterhead: true, kepada: true, items: true, closing: false,
   });
@@ -92,13 +100,32 @@ export default function RabEditor() {
       .catch(console.error);
   }, [isEdit]);
 
+  // Load harga historis langsung dari RAB-RAB sebelumnya (sumber kebenaran).
+  // Re-load setiap kali `id` berubah supaya RAB yang lagi di-edit dikecualikan
+  // dari agregasi (hindari self-reference).
+  useEffect(() => {
+    getRabItemsAggregated({ excludeRabId: id || null })
+      .then(setPriceHistoryList)
+      .catch(console.error);
+  }, [id]);
+
   useEffect(() => {
     if (!id || loadedIdRef.current === id) return;
     setLoading(true);
     getDokumen(id)
       .then(data => {
         if (!data) { showToast("Dokumen tidak ditemukan", true); navigate("/Dashboard/rab"); return; }
-        setForm({ ...EMPTY, ...data });
+        // Migrate old flat items → groups format
+        let normalized = { ...makeEmpty(), ...data };
+        if (data.items && !data.groups) {
+          normalized.groups = [{
+            id: `grp_${Date.now()}`,
+            nama: "Daftar Pekerjaan",
+            items: data.items,
+          }];
+        }
+        delete normalized.items;
+        setForm(normalized);
         loadedIdRef.current = id;
       })
       .catch(() => showToast("Gagal memuat", true))
@@ -120,11 +147,18 @@ export default function RabEditor() {
   };
 
   /* ── derived ── */
-  const totals           = useMemo(() => hitungTotal(form.items, form.ppnAktif, 11), [form.items, form.ppnAktif]);
-  const selectedInstansi  = instansiList.find(i => i.id === form.instansiId) ?? null;
+  const totals = useMemo(
+    () => hitungTotalGroups(form.groups, form.ppnAktif, 11),
+    [form.groups, form.ppnAktif]
+  );
+  const totalItemCount   = useMemo(
+    () => (form.groups || []).reduce((n, g) => n + (g.items?.length || 0), 0),
+    [form.groups]
+  );
+  const selectedInstansi = instansiList.find(i => i.id === form.instansiId) ?? null;
   const pjList           = selectedInstansi?.penanggungJawab ?? [];
 
-  /* ── setters ── */
+  /* ── simple setters ── */
   const set       = (k, v) => setForm(f => ({ ...f, [k]: v }));
   const setKepada = (k, v) => setForm(f => ({ ...f, kepada: { ...f.kepada, [k]: v } }));
   const toggleSec = k => setOpenSec(s => ({ ...s, [k]: !s[k] }));
@@ -142,30 +176,106 @@ export default function RabEditor() {
     }));
   };
 
-  const updateItem = (idx, patch) => setForm(f => {
-    const items = [...f.items];
-    items[idx] = { ...items[idx], ...patch };
-    return { ...f, items };
+  /* ── group management ── */
+  const addGroup = () => setForm(f => ({
+    ...f,
+    groups: f.groups.length < 26
+      ? [...f.groups, newGroup("Pekerjaan Baru")]
+      : f.groups,
+  }));
+
+  const removeGroup = gIdx => setForm(f => ({
+    ...f,
+    groups: f.groups.length > 1 ? f.groups.filter((_, i) => i !== gIdx) : f.groups,
+  }));
+
+  const renameGroup = (gIdx, nama) => setForm(f => {
+    const groups = [...f.groups];
+    groups[gIdx] = { ...groups[gIdx], nama };
+    return { ...f, groups };
   });
-  const addItem    = () => setForm(f => ({ ...f, items: [...f.items, newItem()] }));
-  const removeItem = idx => setForm(f => ({ ...f, items: f.items.filter((_, i) => i !== idx) }));
 
-  const handleCopyRabItems = (items, append) => {
-    setForm(f => ({ ...f, items: append ? [...f.items, ...items] : items }));
-    showToast(`✓ ${items.length} item berhasil disalin`);
-  };
+  const moveGroupUp = gIdx => setForm(f => {
+    if (gIdx === 0) return f;
+    const groups = [...f.groups];
+    [groups[gIdx - 1], groups[gIdx]] = [groups[gIdx], groups[gIdx - 1]];
+    return { ...f, groups };
+  });
 
-  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
-  const handleDragEnd = ({ active, over }) => {
+  const moveGroupDown = gIdx => setForm(f => {
+    if (gIdx >= f.groups.length - 1) return f;
+    const groups = [...f.groups];
+    [groups[gIdx], groups[gIdx + 1]] = [groups[gIdx + 1], groups[gIdx]];
+    return { ...f, groups };
+  });
+
+  /* ── item management (within group) ── */
+  const addItemToGroup = gIdx => setForm(f => {
+    const groups = [...f.groups];
+    groups[gIdx] = { ...groups[gIdx], items: [...groups[gIdx].items, newItem()] };
+    return { ...f, groups };
+  });
+
+  const updateGroupItem = (gIdx, iIdx, patch) => setForm(f => {
+    const groups = [...f.groups];
+    const items = [...groups[gIdx].items];
+    items[iIdx] = { ...items[iIdx], ...patch };
+    groups[gIdx] = { ...groups[gIdx], items };
+    return { ...f, groups };
+  });
+
+  const removeGroupItem = (gIdx, iIdx) => setForm(f => {
+    const groups = [...f.groups];
+    groups[gIdx] = { ...groups[gIdx], items: groups[gIdx].items.filter((_, i) => i !== iIdx) };
+    return { ...f, groups };
+  });
+
+  const handleGroupDragEnd = (gIdx, { active, over }) => {
     if (!over || active.id === over.id) return;
     setForm(f => {
-      const o = f.items.findIndex(i => i.id === active.id);
-      const n = f.items.findIndex(i => i.id === over.id);
-      return { ...f, items: arrayMove(f.items, o, n) };
+      const groups = [...f.groups];
+      const items = [...groups[gIdx].items];
+      const o = items.findIndex(i => i.id === active.id);
+      const n = items.findIndex(i => i.id === over.id);
+      groups[gIdx] = { ...groups[gIdx], items: arrayMove(items, o, n) };
+      return { ...f, groups };
     });
   };
 
-  /* ── auto-save (skip untuk guest — simpan harus eksplisit) ── */
+  /* ── copy & master harga ── */
+  const handleCopyRabItems = (items, append) => {
+    const newGrp = {
+      id: `grp_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+      nama: "Pekerjaan Disalin",
+      items,
+    };
+    setForm(f => ({
+      ...f,
+      groups: append ? [...f.groups, newGrp] : [newGrp],
+    }));
+    showToast(`✓ ${items.length} item berhasil disalin sebagai Point baru`);
+  };
+
+  const handlePickMasterHarga = (picked) => {
+    const newItems = picked.map(p => ({
+      ...newItem(),
+      nama: p.nama + (p.merek ? ` (${p.merek})` : ""),
+      satuan: p.satuan || "pcs",
+      hargaSatuan: Number(p.harga) || 0,
+    }));
+    setForm(f => {
+      const groups = [...f.groups];
+      const lastIdx = groups.length - 1;
+      const lastGroup = groups[lastIdx];
+      const existingItems = lastGroup.items.filter(it => it.nama.trim());
+      groups[lastIdx] = { ...lastGroup, items: [...existingItems, ...newItems] };
+      return { ...f, groups };
+    });
+    const lastLetter = String.fromCharCode(65 + form.groups.length - 1);
+    showToast(`✓ ${newItems.length} item ditambahkan ke Point ${lastLetter}`);
+  };
+
+  /* ── auto-save (skip untuk guest) ── */
   const mounted = useRef(false);
   useEffect(() => {
     if (!mounted.current) { mounted.current = true; return; }
@@ -181,11 +291,14 @@ export default function RabEditor() {
 
   /* ── validate + save ── */
   const validate = () => {
-    if (!form.perihal.trim()) return "Perihal wajib diisi";
-    if (!form.instansiId)     return "Pilih instansi (letterhead)";
-    if (!form.ttd?.nama)      return "Pilih penanggung jawab (TTD)";
-    if (!form.items.length)   return "Minimal 1 item";
-    if (form.items.find(it => !it.nama.trim())) return "Ada item tanpa nama";
+    if (!form.perihal.trim())              return "Perihal wajib diisi";
+    if (!form.instansiId)                 return "Pilih instansi (letterhead)";
+    if (form.showTTD && !form.ttd?.nama)  return "Pilih penanggung jawab (TTD)";
+    const groups = form.groups || [];
+    if (!groups.length)       return "Minimal 1 point pekerjaan";
+    const allItems = groups.flatMap(g => g.items || []);
+    if (!allItems.length)     return "Minimal 1 item";
+    if (allItems.find(it => !it.nama.trim())) return "Ada item tanpa nama";
     return null;
   };
 
@@ -222,14 +335,30 @@ export default function RabEditor() {
         if (statusNext === "final") navigate(`/rab/${newId}`);
         else navigate(`/Dashboard/rab/${newId}`, { replace: true });
       }
+
+      // Refresh price history — RAB baru yang disimpan sekarang bisa jadi referensi
+      // untuk autocomplete di sesi berikutnya. Non-blocking.
+      getRabItemsAggregated({ excludeRabId: id || null })
+        .then(setPriceHistoryList)
+        .catch(() => {});
     } catch (e) {
       showToast("Gagal: " + e.message, true);
     } finally { setSaving(false); }
   };
 
+  const restoreImgs = useRef(null);
+
   const handlePrint = useReactToPrint({
     contentRef: printRef,
     documentTitle: `RAB-${form.nomor || form.perihal || "dokumen"}`,
+    onBeforePrint: async () => {
+      if (!printRef.current) return;
+      restoreImgs.current = await inlineImgsForPrint(printRef.current);
+    },
+    onAfterPrint: () => {
+      restoreImgs.current?.();
+      restoreImgs.current = null;
+    },
     pageStyle: `@page{size:A4 portrait;margin:0}@media print{body{background:#fff!important;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}.laporan-form{page-break-after:always;margin:0!important}.laporan-form:last-child{page-break-after:auto}.laporan-page{box-shadow:none!important;margin:0!important}.laporan-section{page-break-inside:avoid}table{page-break-inside:avoid}img{max-width:100%!important}*{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}}`,
   });
 
@@ -454,28 +583,48 @@ export default function RabEditor() {
               </div>
 
               <div>
-                <Label required>Penanggung Jawab (TTD)</Label>
-                <select className={inp}
-                  value={form.ttd?.penanggungJawabId || ""}
-                  onChange={e => handlePjChange(e.target.value)}>
-                  <option value="">— Pilih penanggung jawab —</option>
-                  {pjList.map(p => <option key={p.id} value={p.id}>{p.nama} — {p.jabatan}</option>)}
-                </select>
-                {!pjList.length && form.instansiId && (
-                  <div className="mt-2 flex items-start gap-2 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
-                    <AlertCircle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
-                    <span>Instansi belum punya penanggung jawab. Tambah di <strong>Master Data → Instansi</strong>.</span>
-                  </div>
+                <div className="flex items-center justify-between mb-1.5">
+                  <Label required={form.showTTD}>Penanggung Jawab (TTD)</Label>
+                  <label className="flex items-center gap-2 cursor-pointer select-none">
+                    <span className="text-xs text-slate-500">Tampilkan TTD</span>
+                    <button
+                      type="button"
+                      onClick={() => set("showTTD", !form.showTTD)}
+                      className={`relative w-9 h-5 rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-amber-500/30 ${form.showTTD ? "bg-amber-500" : "bg-slate-200"}`}
+                      aria-pressed={form.showTTD}
+                    >
+                      <span className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${form.showTTD ? "translate-x-4" : "translate-x-0"}`} />
+                    </button>
+                  </label>
+                </div>
+                {form.showTTD && (
+                  <>
+                    <select className={inp}
+                      value={form.ttd?.penanggungJawabId || ""}
+                      onChange={e => handlePjChange(e.target.value)}>
+                      <option value="">— Pilih penanggung jawab —</option>
+                      {pjList.map(p => <option key={p.id} value={p.id}>{p.nama} — {p.jabatan}</option>)}
+                    </select>
+                    {!pjList.length && form.instansiId && (
+                      <div className="mt-2 flex items-start gap-2 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                        <AlertCircle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+                        <span>Instansi belum punya penanggung jawab. Tambah di <strong>Master Data → Instansi</strong>.</span>
+                      </div>
+                    )}
+                    {form.ttd?.nama && (
+                      <div className="mt-2 flex items-center gap-2 text-xs bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2">
+                        <CheckCircle className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                        <span className="text-emerald-700">
+                          <strong>{form.ttd.nama}</strong> · {form.ttd.jabatan}
+                          {form.ttd.signature?.url && " · ✓ TTD"}
+                          {form.ttd.stempel?.url   && " · ✓ Stempel"}
+                        </span>
+                      </div>
+                    )}
+                  </>
                 )}
-                {form.ttd?.nama && (
-                  <div className="mt-2 flex items-center gap-2 text-xs bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2">
-                    <CheckCircle className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                    <span className="text-emerald-700">
-                      <strong>{form.ttd.nama}</strong> · {form.ttd.jabatan}
-                      {form.ttd.signature?.url && " · ✓ TTD"}
-                      {form.ttd.stempel?.url   && " · ✓ Stempel"}
-                    </span>
-                  </div>
+                {!form.showTTD && (
+                  <p className="text-xs text-slate-400 mt-1">Blok tanda tangan disembunyikan dari dokumen.</p>
                 )}
               </div>
             </div>
@@ -512,55 +661,64 @@ export default function RabEditor() {
             </div>
           </Section>
 
-          {/* ▸ Daftar Item */}
+          {/* ▸ Daftar Pekerjaan (Groups) */}
           <Section
             icon={<span className="text-lg leading-none">📦</span>}
-            title={`Daftar Barang / Jasa (${form.items.length} item)`}
-            subtitle="Klik + untuk menambah item. Seret untuk mengubah urutan."
+            title={`Daftar Pekerjaan (${totalItemCount} item · ${form.groups.length} point)`}
+            subtitle="Kelompokkan per POINT (A, B, C…). Klik nama Point untuk mengedit."
             color={gold}
             open={openSec.items}
             onToggle={() => toggleSec("items")}
             extra={
-              <button onClick={() => setShowCopyRab(true)}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium border border-slate-200 rounded-lg text-slate-600 hover:bg-slate-50 transition-colors">
-                <Copy className="w-3.5 h-3.5" /> Salin dari RAB lain
-              </button>
+              <div className="flex items-center gap-2 flex-wrap">
+                <button onClick={addGroup} disabled={form.groups.length >= 26}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium border border-slate-200 rounded-lg text-slate-600 hover:bg-slate-50 transition-colors disabled:opacity-40">
+                  <Plus className="w-3.5 h-3.5" /> Tambah Point
+                </button>
+                <button onClick={() => setShowMasterHarga(true)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium border border-amber-300 rounded-lg text-amber-700 bg-amber-50 hover:bg-amber-100 transition-colors">
+                  <Tag className="w-3.5 h-3.5" /> Master Harga
+                </button>
+                <button onClick={() => setShowCopyRab(true)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium border border-slate-200 rounded-lg text-slate-600 hover:bg-slate-50 transition-colors">
+                  <Copy className="w-3.5 h-3.5" /> Salin RAB
+                </button>
+              </div>
             }
           >
-            {/* Column headers (desktop) */}
-            <div className="hidden sm:grid text-xs font-semibold text-slate-400 uppercase tracking-wide px-1 mb-1"
-              style={{ gridTemplateColumns: "28px 28px 1fr 80px 72px 120px 96px 32px" }}>
-              <div /><div className="text-center">#</div>
-              <div>Nama Barang / Jasa</div>
-              <div className="text-center">Satuan</div>
-              <div className="text-center">Vol</div>
-              <div className="text-right">Harga Satuan</div>
-              <div className="text-right">Jumlah</div>
-              <div />
+            <div className="space-y-3">
+              {form.groups.map((grp, gIdx) => (
+                <GroupCard
+                  key={grp.id}
+                  group={grp}
+                  gIdx={gIdx}
+                  letter={String.fromCharCode(65 + gIdx)}
+                  totalGroups={form.groups.length}
+                  priceHistoryList={priceHistoryList}
+                  onRename={nama => renameGroup(gIdx, nama)}
+                  onRemove={() => removeGroup(gIdx)}
+                  onMoveUp={() => moveGroupUp(gIdx)}
+                  onMoveDown={() => moveGroupDown(gIdx)}
+                  onAddItem={() => addItemToGroup(gIdx)}
+                  onUpdateItem={(iIdx, patch) => updateGroupItem(gIdx, iIdx, patch)}
+                  onRemoveItem={iIdx => removeGroupItem(gIdx, iIdx)}
+                  onDragEnd={evt => handleGroupDragEnd(gIdx, evt)}
+                />
+              ))}
             </div>
 
-            <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-              <SortableContext items={form.items.map(i => i.id)} strategy={verticalListSortingStrategy}>
-                <div className="space-y-2">
-                  {form.items.map((it, idx) => (
-                    <ItemRow
-                      key={it.id} item={it} index={idx}
-                      onChange={patch => updateItem(idx, patch)}
-                      onRemove={() => removeItem(idx)}
-                      canRemove={form.items.length > 1}
-                    />
-                  ))}
-                </div>
-              </SortableContext>
-            </DndContext>
-
-            <button onClick={addItem}
-              className="mt-3 w-full py-2.5 border-2 border-dashed border-amber-300 rounded-xl text-sm font-medium text-amber-700 hover:bg-amber-50 hover:border-amber-400 transition-colors flex items-center justify-center gap-2">
-              <Plus className="w-4 h-4" /> Tambah Item
-            </button>
-
-            {/* Totals */}
+            {/* Grand Total */}
             <div className="mt-4 bg-slate-50 rounded-xl border border-slate-200 overflow-hidden">
+              {form.groups.map((grp, gIdx) => {
+                const sub    = hitungSubtotalGroup(grp.items);
+                const letter = String.fromCharCode(65 + gIdx);
+                return (
+                  <div key={grp.id} className="flex justify-between items-center px-4 py-2 border-b border-slate-100">
+                    <span className="text-xs text-slate-500"> {letter} — {grp.nama}</span>
+                    <span className="text-xs font-medium text-slate-600">{formatRupiah(sub)}</span>
+                  </div>
+                );
+              })}
               <div className="flex justify-between items-center px-4 py-2.5 border-b border-slate-200 text-sm text-slate-600">
                 <span>Subtotal</span>
                 <span className="font-medium">{formatRupiah(totals.subtotal)}</span>
@@ -667,8 +825,8 @@ export default function RabEditor() {
           {/* Quick stats */}
           <div className="mt-3 grid grid-cols-3 gap-2 text-center">
             <div className="bg-white rounded-xl border border-slate-200 px-3 py-2.5">
-              <div className="text-lg font-bold text-slate-800">{form.items.length}</div>
-              <div className="text-[11px] text-slate-400 leading-tight">Item</div>
+              <div className="text-lg font-bold text-slate-800">{totalItemCount}</div>
+              <div className="text-[11px] text-slate-400 leading-tight">{form.groups.length} Point</div>
             </div>
             <div className="bg-white rounded-xl border border-slate-200 px-3 py-2.5">
               <div className="text-[13px] font-bold text-amber-600 leading-tight truncate">
@@ -731,6 +889,14 @@ export default function RabEditor() {
         />
       )}
 
+      {/* ══════════════ MASTER HARGA MODAL ══════════════ */}
+      {showMasterHarga && (
+        <MasterHargaPickerModal
+          onClose={() => setShowMasterHarga(false)}
+          onPick={handlePickMasterHarga}
+        />
+      )}
+
     </div>
   );
 }
@@ -754,9 +920,9 @@ function Hint({ children }) {
 /* ─── Section Card ─────────────────────────────────────── */
 function Section({ icon, title, subtitle, color, open, onToggle, children, extra }) {
   return (
-    <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden"
+    <div className="bg-white rounded-2xl border border-slate-200"
       style={{ boxShadow: "0 1px 4px rgba(0,0,0,0.05)" }}>
-      <div className="w-full flex items-center gap-3 px-5 py-4 text-left hover:bg-slate-50 transition-colors cursor-pointer"
+      <div className="w-full flex items-center gap-3 px-5 py-4 text-left hover:bg-slate-50 transition-colors cursor-pointer rounded-t-2xl"
         onClick={onToggle} role="button" tabIndex={0}
         onKeyDown={e => (e.key === "Enter" || e.key === " ") && onToggle()}>
         <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
@@ -778,36 +944,202 @@ function Section({ icon, title, subtitle, color, open, onToggle, children, extra
   );
 }
 
-/* ─── Modal edit nama item ──────────────────────────────── */
-function NamaEditModal({ value, itemIndex, onSave, onClose }) {
+/* ─── Group Card ───────────────────────────────────────── */
+function GroupCard({
+  group, gIdx, letter, totalGroups, priceHistoryList = [],
+  onRename, onRemove, onMoveUp, onMoveDown,
+  onAddItem, onUpdateItem, onRemoveItem, onDragEnd,
+}) {
+  const sensors    = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
+  const subtotal   = hitungSubtotalGroup(group.items);
+  const [editing, setEditing] = useState(false);
+  const [draft,   setDraft]   = useState(group.nama);
+  const inputRef  = useRef(null);
+
+  useEffect(() => { if (editing) inputRef.current?.focus(); }, [editing]);
+
+  const commitRename = () => {
+    const name = draft.trim() || group.nama;
+    onRename(name);
+    setDraft(name);
+    setEditing(false);
+  };
+
+  return (
+    <div className="border border-slate-200 rounded-2xl">
+      {/* Group header bar */}
+      <div className="flex items-center gap-2 px-3 py-2.5 bg-slate-50 border-b border-slate-200 rounded-t-2xl">
+        <div className="w-8 h-8 rounded-lg text-white flex items-center justify-center font-bold text-sm shrink-0"
+          style={{ background: "#003087" }}>
+          {letter}
+        </div>
+
+        {editing ? (
+          <input
+            ref={inputRef}
+            value={draft}
+            onChange={e => setDraft(e.target.value)}
+            onBlur={commitRename}
+            onKeyDown={e => { if (e.key === "Enter") commitRename(); if (e.key === "Escape") setEditing(false); }}
+            className="flex-1 min-w-0 text-sm font-bold border-b-2 border-amber-400 bg-transparent focus:outline-none px-1 py-0.5"
+          />
+        ) : (
+          <button
+            onClick={() => { setDraft(group.nama); setEditing(true); }}
+            className="flex-1 min-w-0 flex items-center gap-1.5 text-left font-bold text-slate-800 hover:text-blue-600 transition-colors text-sm truncate">
+            <span className="truncate">POINT {letter}. {group.nama}</span>
+            <Pencil size={11} className="text-slate-400 shrink-0" />
+          </button>
+        )}
+
+        <div className="flex items-center gap-0.5 shrink-0 ml-auto">
+          <button onClick={onMoveUp} disabled={gIdx === 0} title="Naik"
+            className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-white disabled:opacity-25 transition-colors">
+            <ChevronUp size={13} />
+          </button>
+          <button onClick={onMoveDown} disabled={gIdx === totalGroups - 1} title="Turun"
+            className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-white disabled:opacity-25 transition-colors">
+            <ChevronDown size={13} />
+          </button>
+          <button onClick={onRemove} disabled={totalGroups <= 1} title="Hapus Point"
+            className="p-1.5 rounded-lg text-slate-300 hover:text-red-500 hover:bg-red-50 disabled:opacity-25 transition-colors">
+            <Trash2 size={13} />
+          </button>
+        </div>
+      </div>
+
+      {/* Column headers */}
+      <div className="hidden sm:grid text-xs font-semibold text-slate-400 uppercase tracking-wide px-3 pt-3 pb-1"
+        style={{ gridTemplateColumns: "28px 28px 1fr 80px 72px 120px 96px 32px" }}>
+        <div /><div className="text-center">#</div>
+        <div>Nama Barang / Jasa</div>
+        <div className="text-center">Satuan</div>
+        <div className="text-center">Vol</div>
+        <div className="text-right">Harga Satuan</div>
+        <div className="text-right">Jumlah</div>
+        <div />
+      </div>
+
+      <div className="px-3 pb-3">
+        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
+          <SortableContext items={group.items.map(i => i.id)} strategy={verticalListSortingStrategy}>
+            <div className="space-y-2 pt-1">
+              {group.items.map((it, iIdx) => (
+                <ItemRow
+                  key={it.id} item={it} index={iIdx}
+                  priceHistoryList={priceHistoryList}
+                  onChange={patch => onUpdateItem(iIdx, patch)}
+                  onRemove={() => onRemoveItem(iIdx)}
+                  canRemove={group.items.length > 1}
+                />
+              ))}
+            </div>
+          </SortableContext>
+        </DndContext>
+
+        <button onClick={onAddItem}
+          className="mt-2 w-full py-2 border-2 border-dashed border-slate-200 rounded-xl text-xs font-medium text-slate-500 hover:bg-slate-50 hover:border-slate-300 transition-colors flex items-center justify-center gap-1.5">
+          <Plus className="w-3 h-3" /> Tambah Item ke Point {letter}
+        </button>
+
+        <div className="mt-2 flex justify-end items-center gap-2 px-1">
+          <span className="text-xs text-slate-500">Subtotal Point {letter}:</span>
+          <span className="text-sm font-bold text-slate-700">{formatRupiah(subtotal)}</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ─── Modal edit nama item + saran harga ───────────────── */
+function NamaModal({ value, itemIndex, priceHistoryList, onSave, onClose }) {
   const [draft, setDraft] = useState(value);
   const taRef = useRef(null);
-  useEffect(() => { taRef.current?.focus(); taRef.current?.select(); }, []);
-  const save = () => { onSave(draft); onClose(); };
+
+  useEffect(() => { taRef.current?.focus(); }, []);
+
+  const matches = useMemo(
+    () => findTopMatches(draft || "", priceHistoryList, 7, 0.2),
+    [draft, priceHistoryList]
+  );
+
+  const commit = (patch) => { onSave(patch); onClose(); };
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
       onMouseDown={onClose}>
-      <div className="bg-white rounded-2xl shadow-2xl p-5 w-full max-w-md mx-4"
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg mx-4 flex flex-col max-h-[90vh]"
         onMouseDown={e => e.stopPropagation()}>
-        <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-1">
-          Item #{itemIndex + 1} — Nama Barang / Jasa
-        </p>
-        <textarea
-          ref={taRef}
-          value={draft}
-          onChange={e => setDraft(e.target.value)}
-          onKeyDown={e => { if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) save(); if (e.key === "Escape") onClose(); }}
-          rows={4}
-          placeholder="Nama barang atau jasa…"
-          className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-amber-400 focus:border-amber-400 resize-none mt-1"
-        />
-        <p className="text-xs text-slate-400 mt-1 mb-3">Ctrl+Enter untuk simpan · Esc untuk batal</p>
-        <div className="flex justify-end gap-2">
+
+        {/* Header */}
+        <div className="flex items-center justify-between px-5 py-3.5 border-b border-slate-100 shrink-0">
+          <p className="text-sm font-semibold text-slate-700">
+            Item #{itemIndex + 1} — Nama Barang / Jasa
+          </p>
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-600 transition-colors">
+            <X size={16} />
+          </button>
+        </div>
+
+        {/* Textarea */}
+        <div className="px-5 pt-4 shrink-0">
+          <textarea
+            ref={taRef}
+            value={draft}
+            onChange={e => setDraft(e.target.value)}
+            onKeyDown={e => {
+              if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) commit({ nama: draft });
+              if (e.key === "Escape") onClose();
+            }}
+            rows={3}
+            placeholder="Nama barang atau jasa…"
+            className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-amber-400 focus:border-amber-400 resize-none"
+          />
+          <p className="text-[11px] text-slate-400 mt-1">Ctrl+Enter simpan · Esc batal</p>
+        </div>
+
+        {/* Suggestions */}
+        {matches.length > 0 && (
+          <div className="px-5 pt-3 flex-1 overflow-y-auto">
+            <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wide mb-2 flex items-center gap-1.5">
+              <Search size={10} /> Saran dari RAB sebelumnya
+            </p>
+            <div className="space-y-1 pb-2">
+              {matches.map(item => (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => commit({
+                    nama: item.nama,
+                    satuan: item.satuan || "pcs",
+                    hargaSatuan: applyMarkup(item.harga),
+                  })}
+                  className="w-full text-left flex items-center justify-between px-3 py-2.5 rounded-xl hover:bg-amber-50 border border-transparent hover:border-amber-200 transition-colors"
+                >
+                  <div className="flex-1 min-w-0 pr-3">
+                    <p className="text-sm font-medium text-slate-800 leading-snug">{item.nama}</p>
+                    <p className="text-xs text-slate-500 mt-0.5">
+                      {item.satuan || "pcs"}
+                      {item.usageCount > 0 && <span className="ml-1.5 text-slate-400">· {item.usageCount}× dipakai</span>}
+                    </p>
+                  </div>
+                  <div className="text-right shrink-0">
+                    <p className="text-sm font-bold text-amber-700">{formatRupiah(applyMarkup(item.harga))}</p>
+                    <p className="text-[10px] text-amber-500 font-medium">+{MARKUP_PERCENT}%</p>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Footer */}
+        <div className="flex justify-end gap-2 px-5 py-3.5 border-t border-slate-100 shrink-0">
           <button onClick={onClose}
             className="px-3 py-1.5 text-sm rounded-lg text-slate-600 hover:bg-slate-100 transition-colors">
             Batal
           </button>
-          <button onClick={save}
+          <button onClick={() => commit({ nama: draft })}
             className="px-4 py-1.5 text-sm rounded-lg bg-amber-500 hover:bg-amber-600 text-white font-medium transition-colors">
             Simpan
           </button>
@@ -818,7 +1150,7 @@ function NamaEditModal({ value, itemIndex, onSave, onClose }) {
 }
 
 /* ─── Item Row ─────────────────────────────────────────── */
-function ItemRow({ item, index, onChange, onRemove, canRemove }) {
+function ItemRow({ item, index, priceHistoryList = [], onChange, onRemove, canRemove }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: item.id });
   const style = { transform: CSS.Transform.toString(transform), transition };
@@ -830,10 +1162,11 @@ function ItemRow({ item, index, onChange, onRemove, canRemove }) {
       className={`bg-white border rounded-xl transition-shadow ${isDragging ? "shadow-xl opacity-60 border-amber-300" : "border-slate-200 hover:border-slate-300"}`}>
 
       {editingNama && (
-        <NamaEditModal
+        <NamaModal
           value={item.nama}
           itemIndex={index}
-          onSave={v => onChange({ nama: v })}
+          priceHistoryList={priceHistoryList}
+          onSave={patch => onChange(patch)}
           onClose={() => setEditingNama(false)}
         />
       )}
@@ -848,11 +1181,15 @@ function ItemRow({ item, index, onChange, onRemove, canRemove }) {
         <span className="w-6 h-6 rounded-full bg-slate-100 text-slate-500 text-xs flex items-center justify-center font-semibold">
           {index + 1}
         </span>
-        <button type="button" onClick={() => setEditingNama(true)}
-          className="text-left text-sm border border-slate-200 rounded-lg px-2.5 py-1.5 w-full truncate hover:border-amber-400 hover:bg-amber-50/40 transition-colors focus:outline-none focus:ring-2 focus:ring-amber-500/30">
+        <button
+          type="button"
+          onClick={() => setEditingNama(true)}
+          className="w-full h-9 text-left px-2.5 border border-slate-200 rounded-lg text-sm bg-white hover:border-amber-400 transition-colors overflow-hidden"
+        >
           {item.nama
-            ? <span className="text-slate-900">{item.nama}</span>
-            : <span className="text-slate-300">Nama barang atau jasa…</span>}
+            ? <span className="block truncate text-slate-900">{item.nama}</span>
+            : <span className="block truncate text-slate-400">Nama barang atau jasa…</span>
+          }
         </button>
         <select value={item.satuan} onChange={e => onChange({ satuan: e.target.value })}
           className="text-sm border border-slate-200 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-amber-500/30 bg-white text-center">
@@ -878,11 +1215,15 @@ function ItemRow({ item, index, onChange, onRemove, canRemove }) {
             <GripVertical size={16} />
           </button>
           <span className="text-xs font-semibold text-slate-400 shrink-0">#{index + 1}</span>
-          <button type="button" onClick={() => setEditingNama(true)}
-            className="flex-1 text-left text-sm border border-slate-200 rounded-lg px-2.5 py-1.5 truncate hover:border-amber-400 hover:bg-amber-50/40 transition-colors focus:outline-none focus:ring-2 focus:ring-amber-500/30 min-w-0">
+          <button
+            type="button"
+            onClick={() => setEditingNama(true)}
+            className="flex-1 min-w-0 h-9 text-left px-2.5 border border-slate-200 rounded-lg text-sm bg-white hover:border-amber-400 transition-colors overflow-hidden"
+          >
             {item.nama
-              ? <span className="text-slate-900">{item.nama}</span>
-              : <span className="text-slate-300">Nama barang…</span>}
+              ? <span className="block truncate text-slate-900">{item.nama}</span>
+              : <span className="block truncate text-slate-400">Nama barang…</span>
+            }
           </button>
           <button onClick={onRemove} disabled={!canRemove}
             className="text-slate-300 hover:text-red-500 transition-colors disabled:opacity-30 shrink-0">
@@ -915,7 +1256,7 @@ function CopyRabModal({ onClose, onCopy }) {
   const [search,     setSearch]     = useState("");
   const [selected,   setSelected]   = useState(null);
   const [preview,    setPreview]    = useState([]);
-  const [appendMode, setAppendMode] = useState(false);
+  const [appendMode, setAppendMode] = useState(true);
   const [error,      setError]      = useState("");
 
   useEffect(() => {
@@ -929,7 +1270,11 @@ function CopyRabModal({ onClose, onCopy }) {
     setSelected(rab); setError("");
     try {
       const detail = await getDokumen(rab.id).catch(() => rab);
-      setPreview((detail?.items || [])
+      // Support both new (groups) and legacy (items) format
+      const srcItems = detail.groups
+        ? detail.groups.flatMap(g => g.items || [])
+        : (detail.items || []);
+      setPreview(srcItems
         .map(it => ({ ...newItem(), nama: String(it.nama || "").trim(), satuan: String(it.satuan || "pcs"), volume: Number(it.volume) || 1, hargaSatuan: Number(it.hargaSatuan) || 0 }))
         .filter(it => it.nama));
     } catch { setError("Gagal memuat detail RAB"); setPreview([]); }
@@ -941,6 +1286,10 @@ function CopyRabModal({ onClose, onCopy }) {
       .filter(Boolean).join(" ").toLowerCase().includes(search.toLowerCase());
   });
 
+  const getItemCount = r => r.groups
+    ? r.groups.reduce((n, g) => n + (g.items?.length || 0), 0)
+    : (r.items?.length || 0);
+
   return (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4"
       onClick={onClose}>
@@ -950,7 +1299,7 @@ function CopyRabModal({ onClose, onCopy }) {
         <div className="flex items-center justify-between px-5 py-4 border-b">
           <div>
             <p className="font-semibold text-slate-900">Salin Item dari RAB Lain</p>
-            <p className="text-xs text-slate-400 mt-0.5">Ambil daftar item dari RAB yang sudah tersimpan</p>
+            <p className="text-xs text-slate-400 mt-0.5">Item akan ditambah sebagai Point baru</p>
           </div>
           <button onClick={onClose} className="text-slate-400 hover:text-slate-700 transition-colors text-lg">✕</button>
         </div>
@@ -976,7 +1325,7 @@ function CopyRabModal({ onClose, onCopy }) {
                   <div className="text-xs text-slate-400 truncate">
                     {r.kepada?.perusahaan || r.kepada?.yth || "—"}
                     {r.perihal && ` · ${r.perihal}`}
-                    {r.items?.length && ` · ${r.items.length} item`}
+                    {getItemCount(r) > 0 && ` · ${getItemCount(r)} item`}
                   </div>
                 </button>
               ))}
@@ -1004,8 +1353,8 @@ function CopyRabModal({ onClose, onCopy }) {
             <input type="checkbox" checked={appendMode} onChange={e => setAppendMode(e.target.checked)}
               className="mt-0.5 rounded accent-amber-500" />
             <span className="text-sm text-slate-600">
-              Tambahkan ke item yang sudah ada
-              <span className="block text-xs text-slate-400">(tidak menghapus item yang sudah diinput)</span>
+              Tambahkan sebagai Point baru
+              <span className="block text-xs text-slate-400">(tidak menghapus Point yang sudah ada)</span>
             </span>
           </label>
 
@@ -1038,4 +1387,130 @@ function deriveKota(alamat = "") {
   if (!alamat) return "";
   const last = alamat.split(",").pop()?.trim() || "";
   return last.split(/[-–]/).pop()?.trim() || last;
+}
+
+/* ─── Master Harga Picker Modal ─────────────────────────── */
+function MasterHargaPickerModal({ onClose, onPick }) {
+  const [masterList, setMasterList] = useState([]);
+  const [loading, setLoading]       = useState(true);
+  const [search, setSearch]         = useState("");
+  const [selected, setSelected]     = useState(new Set());
+  const [error, setError]           = useState("");
+
+  useEffect(() => {
+    getAllMasterHarga()
+      .then(list => setMasterList(list))
+      .catch(() => setError("Gagal memuat Master Harga"))
+      .finally(() => setLoading(false));
+  }, []);
+
+  const filtered = masterList.filter(item => {
+    if (!search) return true;
+    return [item.nama, item.merek, item.satuan]
+      .filter(Boolean).join(" ").toLowerCase().includes(search.toLowerCase());
+  });
+
+  const toggle = (id) => setSelected(prev => {
+    const next = new Set(prev);
+    next.has(id) ? next.delete(id) : next.add(id);
+    return next;
+  });
+
+  const handlePick = () => {
+    const picked = masterList.filter(i => selected.has(i.id));
+    if (!picked.length) return;
+    onPick(picked);
+    onClose();
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4"
+      onClick={onClose}>
+      <div className="bg-white rounded-2xl w-full max-w-md max-h-[80vh] flex flex-col shadow-2xl"
+        onClick={e => e.stopPropagation()}>
+
+        <div className="flex items-center justify-between px-5 py-4 border-b">
+          <div>
+            <p className="font-semibold text-slate-900 flex items-center gap-2">
+              <Tag size={16} className="text-amber-500" /> Pilih dari Master Harga
+            </p>
+            <p className="text-xs text-slate-400 mt-0.5">Item akan ditambahkan ke Point terakhir</p>
+          </div>
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-700 transition-colors text-lg">✕</button>
+        </div>
+
+        <div className="px-5 pt-4 pb-2">
+          <div className="relative">
+            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+            <input
+              className={`${inp} pl-9 h-9`}
+              placeholder="Cari nama atau merek…"
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              autoFocus
+            />
+            {search && (
+              <button onClick={() => setSearch("")} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
+                <X size={13} />
+              </button>
+            )}
+          </div>
+        </div>
+
+        <div className="flex-1 overflow-y-auto px-5 pb-4 space-y-1.5">
+          {loading ? (
+            <div className="text-center py-10 text-slate-400 text-sm">Memuat…</div>
+          ) : error ? (
+            <div className="text-center py-10 text-red-500 text-sm">{error}</div>
+          ) : filtered.length === 0 ? (
+            <div className="text-center py-10 text-slate-400 text-sm">
+              {search ? "Tidak ada hasil." : "Master harga masih kosong."}
+            </div>
+          ) : (
+            filtered.map(item => {
+              const isChecked = selected.has(item.id);
+              return (
+                <button key={item.id} onClick={() => toggle(item.id)}
+                  className={`w-full text-left px-3.5 py-3 rounded-xl border transition-all ${
+                    isChecked
+                      ? "border-amber-400 bg-amber-50"
+                      : "border-slate-200 hover:border-slate-300 hover:bg-slate-50"
+                  }`}>
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-semibold text-slate-800 truncate">{item.nama}</p>
+                      {item.merek && (
+                        <p className="text-xs text-slate-400 truncate">{item.merek}</p>
+                      )}
+                    </div>
+                    <div className="text-right shrink-0">
+                      <p className="text-sm font-bold text-amber-700">{formatRupiah(item.harga)}</p>
+                      <p className="text-xs text-slate-400">/ {item.satuan}</p>
+                    </div>
+                    <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 transition-colors ${
+                      isChecked ? "border-amber-500 bg-amber-500" : "border-slate-300"
+                    }`}>
+                      {isChecked && <svg width="10" height="8" viewBox="0 0 10 8" fill="none"><path d="M1 4L3.5 6.5L9 1" stroke="white" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/></svg>}
+                    </div>
+                  </div>
+                </button>
+              );
+            })
+          )}
+        </div>
+
+        <div className="flex gap-3 px-5 py-4 border-t">
+          <button onClick={onClose}
+            className="flex-1 py-2.5 border border-slate-200 rounded-xl text-sm font-medium text-slate-600 hover:bg-slate-50 transition-colors">
+            Batal
+          </button>
+          <button onClick={handlePick} disabled={selected.size === 0}
+            className="flex-1 py-2.5 rounded-xl text-sm font-bold text-white transition-opacity disabled:opacity-40"
+            style={{ background: navy }}>
+            Tambahkan {selected.size > 0 ? `(${selected.size})` : ""}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
 }

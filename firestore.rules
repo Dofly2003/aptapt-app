@@ -45,6 +45,17 @@ service cloud.firestore {
     }
 
     // =========================================================================
+    // USERNAME INDEX — koleksi publik untuk lookup username→email saat login
+    // Hanya get (1 dokumen) yang diizinkan tanpa auth; list diblokir agar tidak
+    // bisa di-enumerate. Admin bisa write untuk create/update/delete entri.
+    // =========================================================================
+    match /usernames/{username} {
+      allow get:   if true;
+      allow list:  if false;
+      allow write: if isAdmin();
+    }
+
+    // =========================================================================
     // USERS
     // =========================================================================
     match /users/{userId} {
@@ -101,7 +112,7 @@ service cloud.firestore {
     // PENGUJIAN
     // =========================================================================
     match /pengujian/{id} {
-      allow get:          if true; // publik bisa baca 1 dokumen (untuk share laporan)
+      allow get:          if resource.data.get('isPublic', false) == true || isActiveUser();
       allow create:       if isActiveUser() && ownsResource(request.resource.data);
       allow update:       if isActiveUser() && (ownsResource(resource.data) || isAdmin());
       allow delete:       if isAdmin();
@@ -334,6 +345,58 @@ service cloud.firestore {
                                  ['guestUid','operation','targetCollection','proposedData','status']);
       allow update:       if isAdmin();
       allow delete:       if isAdmin();
+    }
+
+    // =========================================================================
+    // KASBON (Akomodasi & Makan) — sistem kasbon/uang muka perjalanan
+    // =========================================================================
+    function isFinanceOrAbove() {
+      return isActiveUser() && (getRole() == 'finance' || getRole() == 'admin' || getRole() == 'superadmin');
+    }
+    function canTopUp() {
+      return isActiveUser() && (getRole() == 'finance' || getRole() == 'superadmin');
+    }
+
+    match /kasbon_saldo/{userId} {
+      // Pemilik saldo atau finance/superadmin bisa baca
+      allow read: if isActiveUser() && (request.auth.uid == userId || isFinanceOrAbove());
+      // Hanya finance/superadmin yang bisa top up (write saldo)
+      // addExpense juga menulis ke sini via runTransaction — dibatasi via Cloud Functions /
+      // karena client menggunakan runTransaction, kita izinkan write jika authenticated
+      allow write: if isActiveUser();
+    }
+
+    match /kasbon_transactions/{txId} {
+      // Pemilik atau finance/superadmin bisa baca
+      allow read: if isActiveUser() && (resource.data.userId == request.auth.uid || isFinanceOrAbove());
+      allow list: if isActiveUser();
+      // User bisa buat transaksi expense untuk diri sendiri;
+      // finance/superadmin bisa buat topup untuk siapa saja
+      allow create: if isActiveUser()
+        && (
+          // expense untuk diri sendiri
+          (request.resource.data.type == 'expense' && request.resource.data.userId == request.auth.uid)
+          ||
+          // topup oleh finance/superadmin
+          (request.resource.data.type in ['topup', 'topup+reimburse'] && canTopUp())
+        );
+      allow update: if false; // transaksi tidak bisa diubah
+      allow delete: if isSuperAdmin();
+    }
+
+    // =========================================================================
+    // ANALYTICS EVENTS — siapapun boleh tulis (termasuk pengunjung anonim),
+    // hanya superadmin yang boleh baca (sudah dicakup wildcard di atas).
+    // =========================================================================
+    match /analytics_events/{docId} {
+      allow create: if true
+        && request.resource.data.keys().hasAll(['sessionId', 'eventType', 'path', 'date'])
+        && request.resource.data.sessionId is string
+        && request.resource.data.sessionId.size() <= 50
+        && request.resource.data.eventType in ['page_view', 'click', 'download', 'search', 'filter']
+        && request.resource.data.path is string
+        && request.resource.data.path.size() <= 200;
+      allow read, list, delete, update: if isSuperAdmin();
     }
 
     // =========================================================================

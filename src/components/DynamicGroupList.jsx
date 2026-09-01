@@ -66,10 +66,12 @@ export default function DynamicGroupList({
           const isOpen = openIndex === idx;
           return (
             <div key={idx} className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-              <button
-                type="button"
-                className="w-full flex items-center justify-between px-3 py-2 active:bg-gray-50 transition text-left"
+              <div
+                role="button"
+                tabIndex={0}
+                className="w-full flex items-center justify-between px-3 py-2 active:bg-gray-50 transition text-left cursor-pointer"
                 onClick={() => setOpenIndex(isOpen ? null : idx)}
+                onKeyDown={e => e.key === "Enter" && setOpenIndex(isOpen ? null : idx)}
               >
                 <span className="text-sm font-medium text-gray-800 truncate">
                   {rowLabel(row, idx)}
@@ -86,7 +88,7 @@ export default function DynamicGroupList({
                     ? <ChevronUp size={14} className="text-gray-400" />
                     : <ChevronDown size={14} className="text-gray-400" />}
                 </div>
-              </button>
+              </div>
 
               {isOpen && (
                 <div className="px-3 pb-3 border-t border-gray-100 space-y-3 mt-1">

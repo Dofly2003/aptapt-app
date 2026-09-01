@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@600;700;800&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;}
+@keyframes aptfloat{0%,100%{transform:translateY(0)}50%{transform:translateY(-13px)}}
+@keyframes aptfloat2{0%,100%{transform:translateY(0)}50%{transform:translateY(11px)}}
+</style>
+</helmet>
+<div onMouseEnter="{{ pause }}" onMouseLeave="{{ resume }}" style="position:relative;width:1920px;height:800px;overflow:hidden;background:#221d19;font-family:'IBM Plex Sans',sans-serif;">
+
+  <div style="position:absolute;top:-160px;right:-60px;width:780px;height:780px;border-radius:50%;background:radial-gradient(circle,rgba(238,122,60,0.30),rgba(238,122,60,0) 65%);pointer-events:none;z-index:0;"></div>
+  <div style="position:absolute;bottom:-220px;left:-120px;width:560px;height:560px;border-radius:50%;background:radial-gradient(circle,rgba(238,122,60,0.10),rgba(238,122,60,0) 68%);pointer-events:none;z-index:0;"></div>
+
+  <div style="{{ trackStyle }}">
+
+    <!-- SLIDE 1 -->
+    <section data-screen-label="Slide 1" style="width:1920px;height:100%;flex-shrink:0;display:flex;align-items:center;position:relative;z-index:1;">
+      <div style="width:830px;padding-left:130px;display:flex;flex-direction:column;gap:28px;">
+        <div style="display:flex;align-items:center;gap:12px;">
+          <span style="width:10px;height:10px;background:#ee7a3c;border-radius:2px;"></span>
+          <span style="font-size:14px;font-weight:600;letter-spacing:2.5px;color:#f0a06a;text-transform:uppercase;">PT Adytia Putra Teknik</span>
+        </div>
+        <h1 style="font-family:'Archivo',sans-serif;font-weight:800;font-size:63px;line-height:1.08;letter-spacing:-0.5px;color:#f7f1ea;margin:0;max-width:640px;">Sistem Manajemen Web untuk Operasional yang Lebih Efisien</h1>
+        <p style="font-size:21px;line-height:1.65;color:#c0b2a4;margin:0;max-width:540px;">Dashboard dan admin panel terpusat untuk mengelola data, proses, dan tim perusahaan dalam satu platform terintegrasi.</p>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;">
+          <span style="padding:7px 15px;border:1px solid rgba(255,255,255,0.14);border-radius:999px;color:#d8cabd;font-size:13px;letter-spacing:0.3px;">Web Dashboard</span>
+          <span style="padding:7px 15px;border:1px solid rgba(255,255,255,0.14);border-radius:999px;color:#d8cabd;font-size:13px;letter-spacing:0.3px;">Admin Panel</span>
+          <span style="padding:7px 15px;border:1px solid rgba(255,255,255,0.14);border-radius:999px;color:#d8cabd;font-size:13px;letter-spacing:0.3px;">Laporan Real-time</span>
+        </div>
+        <div style="display:flex;gap:14px;margin-top:6px;">
+          <button style="background:#ee7a3c;color:#221d19;border:none;padding:17px 34px;border-radius:11px;font-family:'IBM Plex Sans',sans-serif;font-weight:600;font-size:17px;cursor:pointer;" style-hover="background:#f6884a;">Konsultasi Gratis</button>
+          <button style="background:transparent;color:#f2e9e0;border:1px solid rgba(255,255,255,0.22);padding:17px 30px;border-radius:11px;font-family:'IBM Plex Sans',sans-serif;font-weight:600;font-size:17px;cursor:pointer;" style-hover="border-color:rgba(255,255,255,0.5);">Lihat Layanan</button>
+        </div>
+      </div>
+
+      <div style="flex:1;height:100%;position:relative;display:flex;align-items:center;justify-content:center;padding-right:70px;">
+        <div style="width:760px;background:#fbf6f1;border-radius:20px;box-shadow:0 40px 90px rgba(0,0,0,0.45);overflow:hidden;">
+          <div style="height:46px;background:#efe7df;display:flex;align-items:center;gap:7px;padding:0 18px;">
+            <span style="width:11px;height:11px;border-radius:50%;background:#d6cabd;"></span>
+            <span style="width:11px;height:11px;border-radius:50%;background:#d6cabd;"></span>
+            <span style="width:11px;height:11px;border-radius:50%;background:#d6cabd;"></span>
+            <div style="margin-left:16px;height:22px;flex:1;max-width:340px;background:#fff;border-radius:6px;"></div>
+          </div>
+          <div style="display:flex;height:432px;">
+            <div style="width:80px;background:#241f1b;padding:22px 0;display:flex;flex-direction:column;align-items:center;gap:16px;">
+              <div style="width:34px;height:34px;border-radius:9px;background:#ee7a3c;margin-bottom:6px;"></div>
+              <div style="width:30px;height:11px;border-radius:5px;background:#ee7a3c;"></div>
+              <div style="width:30px;height:11px;border-radius:5px;background:#4a423b;"></div>
+              <div style="width:30px;height:11px;border-radius:5px;background:#4a423b;"></div>
+              <div style="width:30px;height:11px;border-radius:5px;background:#4a423b;"></div>
+              <div style="width:30px;height:11px;border-radius:5px;background:#4a423b;"></div>
+            </div>
+            <div style="flex:1;padding:24px 26px;display:flex;flex-direction:column;gap:18px;">
+              <div style="display:flex;justify-content:space-between;align-items:center;">
+                <div style="font-family:'Archivo',sans-serif;font-weight:700;font-size:18px;color:#2a2420;">Dashboard Operasional</div>
+                <div style="background:#ee7a3c;color:#fff;font-size:12px;font-weight:600;padding:8px 14px;border-radius:8px;">Export</div>
+              </div>
+              <div style="display:flex;gap:14px;">
+                <div style="flex:1;background:#fff;border:1px solid #ece2d8;border-radius:13px;padding:15px;display:flex;flex-direction:column;gap:7px;">
+                  <div style="font-size:12px;color:#9a8c7f;">Pendapatan</div>
+                  <div style="font-family:'Archivo',sans-serif;font-weight:800;font-size:22px;color:#2a2420;">Rp 1,24M</div>
+                  <div style="font-size:11px;color:#3a9d6b;font-weight:600;">&#9650; 12%</div>
+                </div>
+                <div style="flex:1;background:#fff;border:1px solid #ece2d8;border-radius:13px;padding:15px;display:flex;flex-direction:column;gap:7px;">
+                  <div style="font-size:12px;color:#9a8c7f;">Pesanan</div>
+                  <div style="font-family:'Archivo',sans-serif;font-weight:800;font-size:22px;color:#2a2420;">3.480</div>
+                  <div style="font-size:11px;color:#3a9d6b;font-weight:600;">&#9650; 8%</div>
+                </div>
+                <div style="flex:1;background:#fff;border:1px solid #ece2d8;border-radius:13px;padding:15px;display:flex;flex-direction:column;gap:7px;">
+                  <div style="font-size:12px;color:#9a8c7f;">Efisiensi</div>
+                  <div style="font-family:'Archivo',sans-serif;font-weight:800;font-size:22px;color:#2a2420;">94%</div>
+                  <div style="font-size:11px;color:#3a9d6b;font-weight:600;">&#9650; 24%</div>
+                </div>
+              </div>
+              <div style="flex:1;background:#fff;border:1px solid #ece2d8;border-radius:13px;padding:16px 18px;display:flex;flex-direction:column;gap:12px;">
+                <div style="font-size:13px;color:#9a8c7f;font-weight:500;">Performa Bulanan</div>
+                <div style="flex:1;display:flex;align-items:flex-end;gap:12px;">
+                  <div style="flex:1;border-radius:6px 6px 0 0;height:45%;background:#f0d9c8;"></div>
+                  <div style="flex:1;border-radius:6px 6px 0 0;height:68%;background:#f0d9c8;"></div>
+                  <div style="flex:1;border-radius:6px 6px 0 0;height:52%;background:#f0d9c8;"></div>
+                  <div style="flex:1;border-radius:6px 6px 0 0;height:88%;background:#ee7a3c;"></div>
+                  <div style="flex:1;border-radius:6px 6px 0 0;height:60%;background:#f0d9c8;"></div>
+                  <div style="flex:1;border-radius:6px 6px 0 0;height:78%;background:#f3a06b;"></div>
+                  <div style="flex:1;border-radius:6px 6px 0 0;height:48%;background:#f0d9c8;"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- SLIDE 2 -->
+    <section data-screen-label="Slide 2" style="width:1920px;height:100%;flex-shrink:0;display:flex;align-items:center;position:relative;z-index:1;">
+      <div style="width:830px;padding-left:130px;display:flex;flex-direction:column;gap:28px;">
+        <div style="display:flex;align-items:center;gap:12px;">
+          <span style="width:10px;height:10px;background:#ee7a3c;border-radius:2px;"></span>
+          <span style="font-size:14px;font-weight:600;letter-spacing:2.5px;color:#f0a06a;text-transform:uppercase;">PT Adytia Putra Teknik</span>
+        </div>
+        <h1 style="font-family:'Archivo',sans-serif;font-weight:800;font-size:63px;line-height:1.08;letter-spacing:-0.5px;color:#f7f1ea;margin:0;max-width:640px;">Aplikasi Mobile &amp; Custom Software / ERP</h1>
+        <p style="font-size:21px;line-height:1.65;color:#c0b2a4;margin:0;max-width:540px;">Solusi terukur &mdash; dari aplikasi mobile hingga sistem ERP yang dirancang mengikuti alur kerja bisnis Anda.</p>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;">
+          <span style="padding:7px 15px;border:1px solid rgba(255,255,255,0.14);border-radius:999px;color:#d8cabd;font-size:13px;letter-spacing:0.3px;">Aplikasi Mobile</span>
+          <span style="padding:7px 15px;border:1px solid rgba(255,255,255,0.14);border-radius:999px;color:#d8cabd;font-size:13px;letter-spacing:0.3px;">Custom ERP</span>
+          <span style="padding:7px 15px;border:1px solid rgba(255,255,255,0.14);border-radius:999px;color:#d8cabd;font-size:13px;letter-spacing:0.3px;">Otomasi Proses</span>
+        </div>
+        <div style="display:flex;gap:14px;margin-top:6px;">
+          <button style="background:#ee7a3c;color:#221d19;border:none;padding:17px 34px;border-radius:11px;font-family:'IBM Plex Sans',sans-serif;font-weight:600;font-size:17px;cursor:pointer;" style-hover="background:#f6884a;">Konsultasi Gratis</button>
+          <button style="background:transparent;color:#f2e9e0;border:1px solid rgba(255,255,255,0.22);padding:17px 30px;border-radius:11px;font-family:'IBM Plex Sans',sans-serif;font-weight:600;font-size:17px;cursor:pointer;" style-hover="border-color:rgba(255,255,255,0.5);">Lihat Layanan</button>
+        </div>
+      </div>
+
+      <div style="flex:1;height:100%;position:relative;display:flex;align-items:center;justify-content:center;padding-right:80px;">
+        <div style="position:relative;width:660px;height:540px;">
+          <div style="position:absolute;left:0;top:24px;width:470px;background:#fbf6f1;border-radius:16px;box-shadow:0 30px 70px rgba(0,0,0,0.40);overflow:hidden;">
+            <div style="height:40px;background:#efe7df;display:flex;align-items:center;gap:7px;padding:0 16px;">
+              <span style="width:10px;height:10px;border-radius:50%;background:#d6cabd;"></span>
+              <span style="width:10px;height:10px;border-radius:50%;background:#d6cabd;"></span>
+              <span style="width:10px;height:10px;border-radius:50%;background:#d6cabd;"></span>
+            </div>
+            <div style="padding:20px 22px;display:flex;flex-direction:column;gap:15px;">
+              <div style="font-family:'Archivo',sans-serif;font-weight:700;font-size:16px;color:#2a2420;">Manajemen Data Karyawan</div>
+              <div style="display:flex;align-items:center;gap:12px;">
+                <span style="width:30px;height:30px;border-radius:50%;background:#ead9cc;flex-shrink:0;"></span>
+                <div style="display:flex;flex-direction:column;gap:5px;flex:1;"><div style="width:140px;height:9px;background:#2a2420;border-radius:4px;"></div><div style="width:90px;height:7px;background:#cdbfb2;border-radius:4px;"></div></div>
+                <span style="padding:5px 12px;border-radius:999px;font-size:11px;font-weight:600;background:#e3f3ea;color:#2f8f5f;">Aktif</span>
+              </div>
+              <div style="display:flex;align-items:center;gap:12px;">
+                <span style="width:30px;height:30px;border-radius:50%;background:#ead9cc;flex-shrink:0;"></span>
+                <div style="display:flex;flex-direction:column;gap:5px;flex:1;"><div style="width:120px;height:9px;background:#2a2420;border-radius:4px;"></div><div style="width:80px;height:7px;background:#cdbfb2;border-radius:4px;"></div></div>
+                <span style="padding:5px 12px;border-radius:999px;font-size:11px;font-weight:600;background:#fbe8da;color:#d07a32;">Cuti</span>
+              </div>
+              <div style="display:flex;align-items:center;gap:12px;">
+                <span style="width:30px;height:30px;border-radius:50%;background:#ead9cc;flex-shrink:0;"></span>
+                <div style="display:flex;flex-direction:column;gap:5px;flex:1;"><div style="width:150px;height:9px;background:#2a2420;border-radius:4px;"></div><div style="width:70px;height:7px;background:#cdbfb2;border-radius:4px;"></div></div>
+                <span style="padding:5px 12px;border-radius:999px;font-size:11px;font-weight:600;background:#e3f3ea;color:#2f8f5f;">Aktif</span>
+              </div>
+              <div style="display:flex;align-items:center;gap:12px;">
+                <span style="width:30px;height:30px;border-radius:50%;background:#ead9cc;flex-shrink:0;"></span>
+                <div style="display:flex;flex-direction:column;gap:5px;flex:1;"><div style="width:110px;height:9px;background:#2a2420;border-radius:4px;"></div><div style="width:95px;height:7px;background:#cdbfb2;border-radius:4px;"></div></div>
+                <span style="padding:5px 12px;border-radius:999px;font-size:11px;font-weight:600;background:#e3f3ea;color:#2f8f5f;">Aktif</span>
+              </div>
+            </div>
+          </div>
+          <div style="position:absolute;right:0;bottom:0;width:248px;height:500px;background:#241f1b;border-radius:38px;padding:11px;box-shadow:0 40px 80px rgba(0,0,0,0.5);">
+            <div style="width:100%;height:100%;background:#fbf6f1;border-radius:28px;overflow:hidden;display:flex;flex-direction:column;">
+              <div style="background:#ee7a3c;padding:30px 20px 22px;color:#fff;display:flex;flex-direction:column;gap:6px;">
+                <div style="font-size:12px;opacity:0.85;">ADYTIA Mobile</div>
+                <div style="font-family:'Archivo',sans-serif;font-weight:800;font-size:24px;">Rp 24,5Jt</div>
+                <div style="font-size:11px;opacity:0.85;">Saldo Operasional</div>
+              </div>
+              <div style="padding:18px;display:flex;flex-direction:column;gap:14px;flex:1;">
+                <div style="font-size:12px;color:#9a8c7f;font-weight:600;">Transaksi Terbaru</div>
+                <div style="display:flex;align-items:center;gap:10px;">
+                  <span style="width:32px;height:32px;border-radius:9px;background:#fbe8da;flex-shrink:0;"></span>
+                  <div style="display:flex;flex-direction:column;gap:4px;flex:1;"><div style="width:80px;height:8px;background:#2a2420;border-radius:4px;"></div><div style="width:50px;height:6px;background:#cdbfb2;border-radius:3px;"></div></div>
+                  <div style="font-size:12px;font-weight:700;color:#2a2420;">+1,2Jt</div>
+                </div>
+                <div style="display:flex;align-items:center;gap:10px;">
+                  <span style="width:32px;height:32px;border-radius:9px;background:#e3f3ea;flex-shrink:0;"></span>
+                  <div style="display:flex;flex-direction:column;gap:4px;flex:1;"><div style="width:70px;height:8px;background:#2a2420;border-radius:4px;"></div><div style="width:60px;height:6px;background:#cdbfb2;border-radius:3px;"></div></div>
+                  <div style="font-size:12px;font-weight:700;color:#2a2420;">+820rb</div>
+                </div>
+                <div style="display:flex;align-items:center;gap:10px;">
+                  <span style="width:32px;height:32px;border-radius:9px;background:#fbe8da;flex-shrink:0;"></span>
+                  <div style="display:flex;flex-direction:column;gap:4px;flex:1;"><div style="width:90px;height:8px;background:#2a2420;border-radius:4px;"></div><div style="width:45px;height:6px;background:#cdbfb2;border-radius:3px;"></div></div>
+                  <div style="font-size:12px;font-weight:700;color:#2a2420;">+3,4Jt</div>
+                </div>
+              </div>
+              <div style="height:56px;border-top:1px solid #ece2d8;display:flex;align-items:center;justify-content:space-around;padding:0 22px;">
+                <span style="width:9px;height:9px;border-radius:50%;background:#ee7a3c;"></span>
+                <span style="width:9px;height:9px;border-radius:50%;background:#cdbfb2;"></span>
+                <span style="width:9px;height:9px;border-radius:50%;background:#cdbfb2;"></span>
+                <span style="width:9px;height:9px;border-radius:50%;background:#cdbfb2;"></span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- SLIDE 3 -->
+    <section data-screen-label="Slide 3" style="width:1920px;height:100%;flex-shrink:0;display:flex;align-items:center;position:relative;z-index:1;">
+      <div style="width:830px;padding-left:130px;display:flex;flex-direction:column;gap:28px;">
+        <div style="display:flex;align-items:center;gap:12px;">
+          <span style="width:10px;height:10px;background:#ee7a3c;border-radius:2px;"></span>
+          <span style="font-size:14px;font-weight:600;letter-spacing:2.5px;color:#f0a06a;text-transform:uppercase;">PT Adytia Putra Teknik</span>
+        </div>
+        <h1 style="font-family:'Archivo',sans-serif;font-weight:800;font-size:63px;line-height:1.08;letter-spacing:-0.5px;color:#f7f1ea;margin:0;max-width:640px;">Desain UI/UX &amp; Integrasi API yang Mulus</h1>
+        <p style="font-size:21px;line-height:1.65;color:#c0b2a4;margin:0;max-width:540px;">Pengalaman pengguna yang elegan dipadukan integrasi sistem yang andal, siap untuk skala perusahaan.</p>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;">
+          <span style="padding:7px 15px;border:1px solid rgba(255,255,255,0.14);border-radius:999px;color:#d8cabd;font-size:13px;letter-spacing:0.3px;">UI/UX Design</span>
+          <span style="padding:7px 15px;border:1px solid rgba(255,255,255,0.14);border-radius:999px;color:#d8cabd;font-size:13px;letter-spacing:0.3px;">Integrasi API</span>
+          <span style="padding:7px 15px;border:1px solid rgba(255,255,255,0.14);border-radius:999px;color:#d8cabd;font-size:13px;letter-spacing:0.3px;">Company Profile</span>
+        </div>
+        <div style="display:flex;gap:14px;margin-top:6px;">
+          <button style="background:#ee7a3c;color:#221d19;border:none;padding:17px 34px;border-radius:11px;font-family:'IBM Plex Sans',sans-serif;font-weight:600;font-size:17px;cursor:pointer;" style-hover="background:#f6884a;">Konsultasi Gratis</button>
+          <button style="background:transparent;color:#f2e9e0;border:1px solid rgba(255,255,255,0.22);padding:17px 30px;border-radius:11px;font-family:'IBM Plex Sans',sans-serif;font-weight:600;font-size:17px;cursor:pointer;" style-hover="border-color:rgba(255,255,255,0.5);">Lihat Layanan</button>
+        </div>
+      </div>
+
+      <div style="flex:1;height:100%;position:relative;display:flex;align-items:center;justify-content:center;padding-right:80px;">
+        <div style="position:relative;width:640px;height:520px;display:flex;align-items:center;justify-content:center;">
+          <div style="width:340px;background:#fbf6f1;border-radius:20px;box-shadow:0 36px 80px rgba(0,0,0,0.45);padding:26px;display:flex;flex-direction:column;gap:18px;position:relative;z-index:2;">
+            <div style="display:flex;align-items:center;gap:14px;">
+              <span style="width:50px;height:50px;border-radius:50%;background:#ee7a3c;flex-shrink:0;"></span>
+              <div style="display:flex;flex-direction:column;gap:6px;flex:1;"><div style="width:130px;height:11px;background:#2a2420;border-radius:5px;"></div><div style="width:80px;height:8px;background:#cdbfb2;border-radius:4px;"></div></div>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:7px;">
+              <div style="font-size:11px;color:#9a8c7f;">Nama Proyek</div>
+              <div style="height:38px;background:#fff;border:1px solid #e3d7cb;border-radius:9px;"></div>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:7px;">
+              <div style="font-size:11px;color:#9a8c7f;">Status Integrasi</div>
+              <div style="height:38px;background:#fff;border:1px solid #e3d7cb;border-radius:9px;"></div>
+            </div>
+            <div style="display:flex;gap:10px;">
+              <span style="padding:7px 14px;border-radius:8px;background:#ee7a3c;color:#fff;font-size:12px;font-weight:600;">Aktif</span>
+              <span style="padding:7px 14px;border-radius:8px;border:1px solid #e3d7cb;color:#9a8c7f;font-size:12px;font-weight:600;">Draf</span>
+              <span style="padding:7px 14px;border-radius:8px;border:1px solid #e3d7cb;color:#9a8c7f;font-size:12px;font-weight:600;">Arsip</span>
+            </div>
+            <div style="background:#ee7a3c;color:#fff;text-align:center;padding:13px;border-radius:10px;font-weight:600;font-size:14px;">Simpan &amp; Publikasikan</div>
+          </div>
+
+          <div style="position:absolute;top:18px;left:-18px;background:#fff;border-radius:12px;box-shadow:0 16px 40px rgba(0,0,0,0.25);padding:11px 16px;display:flex;align-items:center;gap:10px;font-size:13px;font-weight:600;color:#2a2420;animation:aptfloat 6s ease-in-out infinite;">
+            <span style="width:9px;height:9px;border-radius:50%;background:#3a9d6b;"></span>Payment Gateway
+          </div>
+          <div style="position:absolute;top:56px;right:-30px;background:#fff;border-radius:12px;box-shadow:0 16px 40px rgba(0,0,0,0.25);padding:11px 16px;display:flex;align-items:center;gap:10px;font-size:13px;font-weight:600;color:#2a2420;animation:aptfloat2 7s ease-in-out infinite;">
+            <span style="width:9px;height:9px;border-radius:50%;background:#25d366;"></span>WhatsApp API
+          </div>
+          <div style="position:absolute;bottom:80px;left:-26px;background:#fff;border-radius:12px;box-shadow:0 16px 40px rgba(0,0,0,0.25);padding:11px 16px;display:flex;align-items:center;gap:10px;font-size:13px;font-weight:600;color:#2a2420;animation:aptfloat2 6.5s ease-in-out infinite;">
+            <span style="width:9px;height:9px;border-radius:50%;background:#3b82f6;"></span>Google Maps
+          </div>
+          <div style="position:absolute;bottom:40px;right:-14px;background:#fff;border-radius:12px;box-shadow:0 16px 40px rgba(0,0,0,0.25);padding:11px 16px;display:flex;align-items:center;gap:10px;font-size:13px;font-weight:600;color:#2a2420;animation:aptfloat 7.5s ease-in-out infinite;">
+            <span style="width:9px;height:9px;border-radius:50%;background:#ee7a3c;"></span>Email SMTP
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </div>
+
+  <sc-if value="{{ showArrows }}" hint-placeholder-val="{{ true }}">
+    <button onClick="{{ prev }}" style="position:absolute;left:38px;top:50%;transform:translateY(-50%);width:56px;height:56px;border-radius:50%;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.18);color:#f2e9e0;font-size:24px;line-height:1;display:flex;align-items:center;justify-content:center;cursor:pointer;z-index:5;" style-hover="background:rgba(255,255,255,0.16);">&#8249;</button>
+    <button onClick="{{ next }}" style="position:absolute;right:38px;top:50%;transform:translateY(-50%);width:56px;height:56px;border-radius:50%;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.18);color:#f2e9e0;font-size:24px;line-height:1;display:flex;align-items:center;justify-content:center;cursor:pointer;z-index:5;" style-hover="background:rgba(255,255,255,0.16);">&#8250;</button>
+  </sc-if>
+
+  <div style="position:absolute;bottom:42px;left:130px;display:flex;align-items:center;gap:10px;z-index:5;">
+    <sc-for list="{{ dots }}" as="d" hint-placeholder-count="3">
+      <button onClick="{{ d.onClick }}" style="{{ d.style }}"></button>
+    </sc-for>
+  </div>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1920,&quot;height&quot;:800},&quot;autoplaySeconds&quot;:{&quot;editor&quot;:&quot;int&quot;,&quot;default&quot;:6,&quot;min&quot;:2,&quot;max&quot;:15,&quot;tsType&quot;:&quot;number&quot;},&quot;pauseOnHover&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;},&quot;showArrows&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;}}">
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    let saved = 0;
+    try { saved = parseInt(localStorage.getItem('apt_hero_slide') || '0', 10) || 0; } catch (e) {}
+    this.state = { active: ((saved % 3) + 3) % 3, paused: false };
+  }
+  componentDidMount() {
+    const secs = this.props.autoplaySeconds ?? 6;
+    this.timer = setInterval(() => { if (!this.state.paused) this.next(); }, secs * 1000);
+  }
+  componentWillUnmount() { clearInterval(this.timer); }
+  save(i) { try { localStorage.setItem('apt_hero_slide', String(i)); } catch (e) {} }
+  goTo(i) { const n = ((i % 3) + 3) % 3; this.setState({ active: n }); this.save(n); }
+  next() { this.goTo(this.state.active + 1); }
+  prev() { this.goTo(this.state.active - 1); }
+  renderVals() {
+    const a = this.state.active;
+    const trackStyle = {
+      display: 'flex',
+      width: '5760px',
+      height: '100%',
+      position: 'relative',
+      zIndex: 1,
+      transform: `translateX(-${a * 1920}px)`,
+      transition: 'transform 0.85s cubic-bezier(0.65,0,0.35,1)'
+    };
+    const dots = [0, 1, 2].map(i => ({
+      key: i,
+      onClick: () => this.goTo(i),
+      style: {
+        width: i === a ? '44px' : '14px',
+        height: '14px',
+        borderRadius: '7px',
+        background: i === a ? '#ee7a3c' : 'rgba(255,255,255,0.28)',
+        border: 'none',
+        padding: 0,
+        cursor: 'pointer',
+        transition: 'all 0.4s ease'
+      }
+    }));
+    return {
+      trackStyle,
+      dots,
+      showArrows: this.props.showArrows !== false,
+      next: () => this.next(),
+      prev: () => this.prev(),
+      pause: () => { if (this.props.pauseOnHover !== false) this.setState({ paused: true }); },
+      resume: () => this.setState({ paused: false })
+    };
+  }
+}
+</script>
+</body>
+</html>

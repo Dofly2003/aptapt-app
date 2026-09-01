@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import Sidebar from "../components/Sidebar";
 import Navbar from "../components/Navbar";
 import { Outlet } from "react-router-dom";
@@ -6,6 +6,9 @@ import { Outlet } from "react-router-dom";
 function DashboardLayout() {
 
     const [sidebarOpen, setSidebarOpen] = useState(false);
+
+    const openSidebar  = useCallback(() => setSidebarOpen(true),  []);
+    const closeSidebar = useCallback(() => setSidebarOpen(false), []);
 
     return (
 
@@ -30,14 +33,14 @@ function DashboardLayout() {
 
                     <div
                         className="absolute inset-0 bg-black/40"
-                        onClick={() => setSidebarOpen(false)}
+                        onClick={closeSidebar}
                     />
 
                     {/* DRAWER */}
 
                     <div className="relative w-64 h-full bg-slate-900">
 
-                        <Sidebar closeSidebar={() => setSidebarOpen(false)} />
+                        <Sidebar closeSidebar={closeSidebar} />
 
                     </div>
 
@@ -50,7 +53,7 @@ function DashboardLayout() {
 
             <div className="flex flex-col flex-1">
 
-                <Navbar openSidebar={() => setSidebarOpen(true)} />
+                <Navbar openSidebar={openSidebar} />
 
                 <main className="flex-1 overflow-y-auto p-4 md:p-6">
 

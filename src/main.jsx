@@ -44,19 +44,24 @@ if (isNative) {
 // Skip service worker when running inside Capacitor native app
 
 if (!isNative && "serviceWorker" in navigator) {
+  let updateFound = false;
   window.addEventListener("load", async () => {
     try {
       const reg = await navigator.serviceWorker.register("/sw.js");
 
       console.log("SW REGISTERED:", reg);
 
+      reg.addEventListener("updatefound", () => { updateFound = true; });
+
       if (reg.waiting) {
         reg.waiting.postMessage("SKIP_WAITING");
       }
 
       navigator.serviceWorker.addEventListener("controllerchange", () => {
-        console.log("SW controlling page now → reload");
-        window.location.reload();
+        if (updateFound) {
+          console.log("SW controlling page now → reload");
+          window.location.reload();
+        }
       });
 
     } catch (err) {

@@ -6,6 +6,7 @@ import { Printer, ArrowLeft, AlertCircle, Edit2, Download, Loader2 } from "lucid
 import { db } from "../../firebase/config";
 import TemplateRabAdytia from "../../templates/rab/TemplateRabAdytia";
 import { exportLaporanPdf } from "../../utils/exportLaporanPdf";
+import { inlineImgsForPrint } from "../../utils/inlineImgsForPrint";
 
 const A4_WIDTH_PX = 794; // 210mm @ 96dpi
 
@@ -65,6 +66,7 @@ export default function RabPreview() {
 
   // ===== Responsive scale =====
   useEffect(() => {
+    let timer;
     const calc = () => {
       const wrapper = scrollWrapperRef.current;
       if (!wrapper) return;
@@ -73,10 +75,14 @@ export default function RabPreview() {
       const ratio = Math.min(available / A4_WIDTH_PX, 1);
       setScale(ratio);
     };
+    const debouncedCalc = () => { clearTimeout(timer); timer = setTimeout(calc, 150); };
     calc();
-    window.addEventListener("resize", calc);
-    return () => window.removeEventListener("resize", calc);
-  }, [data]);
+    window.addEventListener("resize", debouncedCalc);
+    return () => {
+      clearTimeout(timer);
+      window.removeEventListener("resize", debouncedCalc);
+    };
+  }, []);
 
   // Measure inner (template) actual height so we can size the wrapper after scale
   useEffect(() => {
@@ -89,9 +95,19 @@ export default function RabPreview() {
   }, [data]);
 
   // ===== Print (native browser dialog) =====
+  const restoreImgs = useRef(null);
+
   const handlePrint = useReactToPrint({
     contentRef: printRef,
     documentTitle: `RAB-${data?.nomor || data?.id || "dokumen"}`,
+    onBeforePrint: async () => {
+      if (!printRef.current) return;
+      restoreImgs.current = await inlineImgsForPrint(printRef.current);
+    },
+    onAfterPrint: () => {
+      restoreImgs.current?.();
+      restoreImgs.current = null;
+    },
     pageStyle: `
   @page { size: A4 portrait; margin: 0; }
   @media print {

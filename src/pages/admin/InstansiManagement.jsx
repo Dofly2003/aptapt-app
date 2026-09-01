@@ -10,6 +10,8 @@ import {
   uploadInstansiImage, deleteInstansiImage,
 } from "../../services/instansiService";
 import { TEMPLATES } from "../../templates/laporan";
+import { KOP_STYLES, DEFAULT_KOP_STYLE } from "../../templates/laporan/kopStyles";
+import KopStylePreview from "../../templates/laporan/kopStyles/KopStylePreview";
 
 const EMPTY = {
   nama: "",
@@ -18,7 +20,9 @@ const EMPTY = {
   web: "",
   telp: "",
   logo: null,
+  logo2: null,
   templateId: "adytia",
+  kopStyle: DEFAULT_KOP_STYLE,
   penanggungJawab: [],
   aktif: true,
 };
@@ -200,7 +204,7 @@ function InstansiCard({ inst, onEdit, onDelete, onReactivate }) {
 }
 
 function InstansiForm({ initial, onCancel, onSave }) {
-  const [form, setForm] = useState({ templateId: "adytia", ...initial });
+  const [form, setForm] = useState({ templateId: "adytia", kopStyle: DEFAULT_KOP_STYLE, ...initial });
   const [saving, setSaving] = useState(false);
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
 
@@ -213,6 +217,17 @@ function InstansiForm({ initial, onCancel, onSave }) {
     if (form.logo?.path) await deleteInstansiImage(form.logo.path);
     const uploaded = await uploadInstansiImage(file, "logo");
     set("logo", uploaded);
+  };
+
+  const handleLogo2 = async (file) => {
+    if (!file) {
+      if (form.logo2?.path) await deleteInstansiImage(form.logo2.path);
+      set("logo2", null);
+      return;
+    }
+    if (form.logo2?.path) await deleteInstansiImage(form.logo2.path);
+    const uploaded = await uploadInstansiImage(file, "logo2");
+    set("logo2", uploaded);
   };
 
   const addPj = () => {
@@ -264,6 +279,28 @@ function InstansiForm({ initial, onCancel, onSave }) {
         </Field>
       </div>
 
+      <Field label="Gaya Kop & Footer" hint="Berlaku untuk semua halaman laporan (A.1 – F). Ganti untuk lihat preview di bawah.">
+        <Select value={form.kopStyle || DEFAULT_KOP_STYLE} onChange={(e) => set("kopStyle", e.target.value)}>
+          {Object.entries(KOP_STYLES).map(([key, s]) => (
+            <option key={key} value={key}>{s.label}</option>
+          ))}
+        </Select>
+        <p className="text-xs text-slate-500 mt-1">
+          {KOP_STYLES[form.kopStyle || DEFAULT_KOP_STYLE]?.description}
+        </p>
+      </Field>
+
+      <div className="border border-slate-200 rounded-lg p-3 bg-slate-50">
+        <p className="text-xs font-medium text-slate-600 mb-2">Preview Halaman (mini A4)</p>
+        <div className="flex justify-center">
+          <KopStylePreview
+            instansi={form}
+            kopStyle={form.kopStyle || DEFAULT_KOP_STYLE}
+            scale={0.32}
+          />
+        </div>
+      </div>
+
       <Field label="Tagline / Bidang Usaha" hint="Ditampilkan di bawah nama pada kop laporan.">
         <Input
           value={form.tagline || ""}
@@ -299,11 +336,18 @@ function InstansiForm({ initial, onCancel, onSave }) {
         </Field>
       </div>
 
-      <ImageUploader
-        value={form.logo?.url}
-        onChange={handleLogo}
-        label="Logo Instansi"
-      />
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <ImageUploader
+          value={form.logo?.url}
+          onChange={handleLogo}
+          label="Logo Instansi (Kiri)"
+        />
+        <ImageUploader
+          value={form.logo2?.url}
+          onChange={handleLogo2}
+          label="Logo Partner / PLN (Kanan)"
+        />
+      </div>
 
       <div>
         <div className="flex items-center justify-between mb-2">

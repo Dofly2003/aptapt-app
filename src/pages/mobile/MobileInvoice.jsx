@@ -4,7 +4,7 @@ import { getDoc, doc } from "firebase/firestore";
 import { db } from "../../firebase/config";
 import { AuthContext } from "../../context/AuthContext";
 import {
-  getAllDokumen, deleteDokumen, formatRupiah, hitungTotal,
+  getAllDokumen, deleteDokumen, formatRupiah, hitungTotalFromDoc,
 } from "../../services/rabService";
 import TemplateInvoiceAdytia from "../../templates/invoice/TemplateInvoiceAdytia";
 import TemplateRabAdytia from "../../templates/rab/TemplateRabAdytia";
@@ -137,10 +137,15 @@ export default function MobileInvoice() {
 
   /* ── responsive scale ── */
   useEffect(() => {
+    let timer;
     const calc = () => setPreviewScale(Math.min((window.innerWidth - 16) / 794, 1));
+    const debouncedCalc = () => { clearTimeout(timer); timer = setTimeout(calc, 150); };
     calc();
-    window.addEventListener("resize", calc);
-    return () => window.removeEventListener("resize", calc);
+    window.addEventListener("resize", debouncedCalc);
+    return () => {
+      clearTimeout(timer);
+      window.removeEventListener("resize", debouncedCalc);
+    };
   }, []);
 
   /* ── Android back closes preview overlay ── */
@@ -275,7 +280,7 @@ export default function MobileInvoice() {
         )}
 
         {visible.map(item => {
-          const totals     = hitungTotal(item.items, item.ppnAktif !== false);
+          const totals     = hitungTotalFromDoc(item);
           const accentColor = tab === "invoice" ? "bg-blue-100" : "bg-amber-100";
           const iconColor   = tab === "invoice" ? "text-blue-700" : "text-amber-700";
           const btnColor    = tab === "invoice" ? "text-blue-700 active:bg-blue-50" : "text-amber-700 active:bg-amber-50";

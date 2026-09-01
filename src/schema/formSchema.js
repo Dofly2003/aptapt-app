@@ -48,25 +48,24 @@ export const formSchema = {
       groups: [
         // ── SURVEY ──────────────────────────────────
         {
-          key: "spesifikasi", label: "Spesifikasi PHB TM",
-          photo: true, minPhotos: 1,
-          photoLabels: ["Foto Full PHB TM"],
-          fields: [
-            { name: "spesifikasi", label: "Spesifikasi", type: "text", placeholder: "IMDM1A" },
-            { name: "tahun",       label: "Tahun Pembuatan", type: "number" },
-          ],
-        },
-        {
           key: "incoming", label: "Incoming",
           photo: true, minPhotos: 3,
           photoLabels: ["Foto Pemutus (CB)","Foto Nameplate PHB Incoming","Foto Nameplate CB"],
           fields: [
+            { name: "spesifikasi",  label: "Spesifikasi",   type: "text", placeholder: "IMDM1A" },
+            { name: "tahun",        label: "Tahun Pembuatan", type: "number" },
             { name: "merk",         label: "Merk",          type: "text" },
             { name: "tipe",         label: "Tipe",          type: "text" },
             { name: "jenisPemutus", label: "Jenis Pemutus", type: "text" },
             { name: "ratingV",      label: "Rating V",      type: "number" },
             { name: "ratingI",      label: "Rating I (A)",  type: "number" },
           ],
+        },
+        {
+          key: "foto_full_phbtm", label: "Foto Full PHB TM",
+          photo: true, photoOnly: true, minPhotos: 1,
+          photoLabels: ["Foto Full PHB TM"],
+          fields: [],
         },
         {
           key: "outgoing", label: "Outgoing",
@@ -86,11 +85,27 @@ export const formSchema = {
           photo: true, minPhotos: 2,
           photoLabels: ["Foto Setting OCR","Foto Setting DGR"],
           fields: [
-            { name: "merk",       label: "Merk Relay",  type: "text" },
-            { name: "tipe",       label: "Tipe Relay",  type: "text" },
-            { name: "settingOCR", label: "Setting OCR", type: "text" },
-            { name: "settingDGR", label: "Setting DGR", type: "text" },
+            { name: "merk",       label: "Merk Relay",                 type: "text" },
+            { name: "tipe",       label: "Tipe Relay",                 type: "text" },
+            { name: "ur",         label: "Ur Tegangan Nominal (kV)",   type: "text", placeholder: "12" },
+            { name: "ik",         label: "Ik Arus Hubung Singkat (kA)", type: "text", placeholder: "31.5" },
+            { name: "ir",         label: "Ir Arus Kerja Relay (A)",    type: "text", placeholder: "100" },
+            { name: "tk",         label: "Tk Waktu Trip (s)",          type: "text", placeholder: "1" },
+            { name: "settingOCR", label: "Setting OCR",                type: "text" },
+            { name: "settingDGR", label: "Setting DGR",                type: "text" },
           ],
+        },
+        {
+          key: "catu_daya", label: "Catu Daya",
+          photo: true, photoOnly: true, minPhotos: 1,
+          photoLabels: ["Foto Catu Daya"],
+          fields: [],
+        },
+        {
+          key: "interlock", label: "Interlock",
+          photo: true, photoOnly: true, minPhotos: 1,
+          photoLabels: ["Foto Interlock"],
+          fields: [],
         },
         {
           key: "fuse", label: "Fuse",
@@ -156,15 +171,6 @@ export const formSchema = {
           fields: [
             { name: "tipe",   label: "Tipe Kabel",    type: "text" },
             { name: "ukuran", label: "Ukuran (mm²)", type: "text" },
-          ],
-        },
-        {
-          key: "kabel_sktm", label: "Spesifikasi Kabel SKTM (Saluran TM)",
-          photo: true, minPhotos: 2,
-          photoLabels: ["Foto Nameplate Kabel TM", "Foto Jalur Kabel TM"],
-          fields: [
-            { name: "tipe",   label: "Tipe Kabel",    type: "text", placeholder: "N2XSY" },
-            { name: "ukuran", label: "Ukuran (mm²)",  type: "text", placeholder: "3 x 1 x 50 mm²" },
           ],
         },
         {
@@ -415,10 +421,16 @@ export const formSchema = {
           photo: true, minPhotos: 1,
           photoLabels: ["Foto Full ACB UTAMA"],
           fields: [
-            { name: "merk",    label: "Merk ACB",     type: "text" },
-            { name: "tipe",    label: "Tipe ACB",     type: "text" },
-            { name: "ratingV", label: "Rating V",     type: "number" },
-            { name: "ratingI", label: "Rating I (A)", type: "number" },
+            { name: "merk",                  label: "Merk ACB",                         type: "text" },
+            { name: "tipe",                  label: "Tipe ACB",                         type: "text" },
+            { name: "ratingV",               label: "Rating V",                         type: "number" },
+            { name: "ratingI",               label: "Rating I / In (A)",                type: "number" },
+            { name: "overload",              label: "I Over Load (Namplate)",           type: "text", placeholder: "1 x In" },
+            { name: "instantenious",         label: "I Instantenious (Namplate)",       type: "text", placeholder: "Isd x Ir" },
+            { name: "trippingDelay",         label: "Tripping Delay (Namplate)",        type: "text", placeholder: "-" },
+            { name: "settingOverload",       label: "I Over Load (Setting)",            type: "text", placeholder: "0.5xIn=1000" },
+            { name: "settingInstantenious",  label: "I Instantenious (Setting)",        type: "text", placeholder: "1.2x1000=1200" },
+            { name: "settingTrippingDelay",  label: "Tripping Delay (Setting)",         type: "text", placeholder: "4 s" },
           ],
         },
         {
@@ -426,6 +438,24 @@ export const formSchema = {
           photo: true, minPhotos: 1,
           photoLabels: ["Foto Nameplate ACB UTAMA"],
           fields: [{ name: "nameplate", label: "Data Nameplate", type: "text" }],
+        },
+        {
+          key: "konstruksi", label: "Data Konstruksi PHB TR",
+          fields: [
+            { name: "ue",                 label: "Rating tegangan operasi (Ue)",          type: "text", placeholder: "220/400-690 V" },
+            { name: "ui",                 label: "Rating tegangan isolasi (Ui)",           type: "text", placeholder: "1000 V" },
+            { name: "uimp",               label: "Tegangan lebih (Uimp)",                 type: "text", placeholder: "12 kV" },
+            { name: "frekuensi",          label: "Frekuensi",                              type: "text", placeholder: "50 Hz" },
+            { name: "tipe_busbar",        label: "Tipe busbar",                            type: "text", placeholder: "-" },
+            { name: "rating_arus_busbar", label: "Rating arus busbar distribusi utama (In)", type: "text", placeholder: "Sampai 2000 A" },
+            { name: "short_time_withstand", label: "Rating short time withstand current", type: "text", placeholder: "1sec" },
+            { name: "distribution_feeders", label: "Distribution feeders",                type: "text", placeholder: "Sampai 2000 A" },
+            { name: "prospective_sc",     label: "Prospective short circuit current",      type: "text", placeholder: "50 kA" },
+            { name: "perlindungan_kontak", label: "Perlindungan terhadap kontak listrik", type: "text", placeholder: "Sampai 65 kA @690ms" },
+            { name: "ketahanan_geteran",  label: "Ketahanan terhadap geteran",             type: "text", placeholder: "Ada/Ya" },
+            { name: "tingkat_proteksi",   label: "Tingkat proteksi eksternal",             type: "text", placeholder: "Normal" },
+            { name: "ketebalan_rangka",   label: "Ketebalan rangka",                       type: "text", placeholder: "Sampai IP 55 - 3mm" },
+          ],
         },
         {
           key: "cb_cabang", label: "CB Cabang",
@@ -478,12 +508,12 @@ export const formSchema = {
         // ── PENGUJIAN ────────────────────────────────
         {
           key: "putaran_fasa", label: "Putaran Fasa",
-          photo: true, photoOnly: true, minPhotos: 2,
+          photo: true, photoOnly: true, minPhotos: 1,
           fields: [],
-          photoLabels: ["Foto Putaran Fasa 1","Foto Putaran Fasa 2"],
+          photoLabels: ["Foto Putaran Fasa"],
         },
         {
-          key: "isolasi_incoming", label: "Tahanan Isolasi Incoming (RSTn-GND)",
+          key: "isolasi_incoming", label: "Tahanan Isolasi Incoming (RST-GND)",
           ...ISOLASI_PER_FIELD,
           fields: [
             { name: "rGnd", label: "R-G (MΩ)", type: "number" },
@@ -492,6 +522,7 @@ export const formSchema = {
             { name: "nGnd", label: "N-G (MΩ)", type: "number" },
             { name: "rs",   label: "R-S (MΩ)", type: "number" },
             { name: "st",   label: "S-T (MΩ)", type: "number" },
+            { name: "rt",   label: "R-T (MΩ)", type: "number" },
           ],
         },
         {
@@ -511,6 +542,7 @@ export const formSchema = {
             { name: "RN", label: "R-N (V)", type: "number" },
             { name: "SN", label: "S-N (V)", type: "number" },
             { name: "TN", label: "T-N (V)", type: "number" },
+            { name: "frekuensi", label: "Frekuensi (Hz)", type: "number" },
           ],
         },
         {
@@ -524,6 +556,7 @@ export const formSchema = {
             { name: "S", label: "Phasa S (A)", type: "number" },
             { name: "T", label: "Phasa T (A)", type: "number" },
             { name: "N", label: "Netral (A)",  type: "number" },
+            { name: "persentase", label: "Persentase Pembebanan (%)", type: "number" },
           ],
         },
         {
@@ -536,6 +569,17 @@ export const formSchema = {
             { name: "S", label: "Phasa S (°C)", type: "number" },
             { name: "T", label: "Phasa T (°C)", type: "number" },
             { name: "N", label: "Netral (°C)",  type: "number" },
+          ],
+        },
+        {
+          key: "suhu_sambungan", label: "Suhu Titik Sambungan",
+          perFieldPhotos: 1,
+          perFieldPhotoLabels: ["Foto Pengukuran"],
+          photo: false,
+          fields: [
+            { name: "trafo",       label: "Terminal Trafo (°C)",    type: "number" },
+            { name: "phb_tm",      label: "Terminal PHB TM (°C)",   type: "number" },
+            { name: "phb_tr_term", label: "Terminal PHB TR (°C)",   type: "number" },
           ],
         },
       ],
@@ -592,6 +636,25 @@ export const formSchema = {
     },
 
     // ═══════════════════════════════════════════════
+    //  FOTO LAINNYA — tab bebas untuk foto tambahan
+    // ═══════════════════════════════════════════════
+    {
+      key: "foto_lainnya",
+      label: "Foto Lainnya",
+      groups: [
+        {
+          key: "umum",
+          label: "Foto Tambahan",
+          photo: true,
+          photoOnly: true,
+          minPhotos: 0,
+          fields: [],
+          photoLabels: [],
+        },
+      ],
+    },
+
+    // ═══════════════════════════════════════════════
     //  PHB TR SPEC — Tabel Proteksi (dynamic rows, hidden tab — rendered inside PHB TR)
     // ═══════════════════════════════════════════════
     {
@@ -602,13 +665,8 @@ export const formSchema = {
       hasRowPhoto: false,
       groups: [],
       rowSchema: [
-        { name: "nama",            label: "Nama Panel / Komponen",  type: "text",   placeholder: "Panel Utama TM" },
-        { name: "merk",            label: "Merk",                   type: "text" },
-        { name: "jenis",           label: "Jenis",                  type: "text",   placeholder: "ACB" },
-        { name: "besaranProteksi", label: "Besaran Proteksi",       type: "text",   placeholder: "630" },
-        { name: "satuan",          label: "Satuan Besaran",          type: "text",   placeholder: "A" },
-        { name: "jumlah",          label: "Jumlah Terpasang",       type: "number" },
-        { name: "tujuanProteksi",  label: "Tujuan Proteksi",        type: "text" },
+        { name: "nama",        label: "Nama Komponen", type: "text", placeholder: "ACB dan MCB" },
+        { name: "keterangan",  label: "Keterangan",    type: "text", placeholder: "Sesuai" },
       ],
     },
 

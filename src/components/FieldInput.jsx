@@ -1,4 +1,4 @@
-export default function FieldInput({ label, value, onChange, type = "text", placeholder }) {
+export default function FieldInput({ label, value, onChange, type = "text", placeholder, onFocus, onBlur }) {
   if (type === "checkbox") {
     return (
       <div className="flex items-center gap-2 py-1">
@@ -24,6 +24,8 @@ export default function FieldInput({ label, value, onChange, type = "text", plac
         inputMode={type === "number" ? "decimal" : "text"}
         value={value ?? ""}
         onChange={(e) => onChange(e.target.value)}
+        onFocus={onFocus}
+        onBlur={onBlur}
         placeholder={placeholder ?? "-"}
         className="px-3 py-2 text-sm rounded-xl border border-gray-200 bg-gray-50
                    focus:bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-100

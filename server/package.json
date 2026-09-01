@@ -5,7 +5,8 @@
   "description": "Presigned-URL API (MinIO) untuk pilot migrasi Storage -> MinIO, prefix inventori/. Jalan di VPS, terpisah dari Firebase Cloud Functions.",
   "main": "index.js",
   "scripts": {
-    "start": "node index.js"
+    "start": "node index.js",
+    "bridge:ketinggian": "node bridge-ketinggian.js"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.658.0",
@@ -13,6 +14,7 @@
     "cors": "^2.8.6",
     "dotenv": "^16.4.5",
     "express": "^5.2.1",
-    "firebase-admin": "^13.6.0"
+    "firebase-admin": "^13.6.0",
+    "mqtt": "^5.10.1"
   }
 }

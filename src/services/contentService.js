@@ -1,4 +1,4 @@
-// src/services/contentService.js
+﻿// src/services/contentService.js
 // Centralized service for all landing page content stored in Firestore.
 // Collections: slides, services, projects, testimonials, settings (single doc: "global")
 
@@ -50,7 +50,7 @@ export async function uploadImage(file, folder = 'misc') {
     const compressed = await imageCompression(file, {
         maxSizeMB: 1,
         maxWidthOrHeight: 1920,
-        useWebWorker: true,
+        useWebWorker: false,
     });
     const safeName = `${Date.now()}_${file.name.replace(/\s+/g, '_')}`;
     const path = `landing/${folder}/${safeName}`;
@@ -69,7 +69,7 @@ export async function deleteImage(path) {
     try {
         await deleteObject(storageRef(storage, path));
     } catch (err) {
-        // Ignore "not found" errors – the doc may have been pointing to a missing file.
+        // Ignore "not found" errors â€“ the doc may have been pointing to a missing file.
         if (err?.code !== 'storage/object-not-found') console.warn('deleteImage', err);
     }
 }
@@ -160,10 +160,10 @@ export async function createService(payload) {
         icon: payload.icon || 'bolt',
         image: payload.image || '',
         imagePath: payload.imagePath || '',
-        // ── NEW ─────────────────────────────────────────────────────────
+        // â”€â”€ NEW â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         category: payload.category || 'electrical',
         categoryTitle: payload.categoryTitle || '',
-        // ────────────────────────────────────────────────────────────────
+        // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         order: payload.order ?? 0,
         isActive: payload.isActive ?? true,
         createdAt: serverTimestamp(),
@@ -294,7 +294,7 @@ export const DEFAULT_SETTINGS = {
     ctaSecondaryText: 'Lihat Layanan',
     heroBadge: 'Bersertifikat SLO & NIDI',
     // SEO
-    metaTitle: 'PT. Adytia Putra Teknik — Jasa Instalasi Listrik & SLO',
+    metaTitle: 'PT. Adytia Putra Teknik â€” Jasa Instalasi Listrik & SLO',
     metaDescription:
         'Jasa pemasangan instalasi listrik, pembuatan SLO & NIDI, dan pemasangan PJU. Tim profesional bersertifikat. Surabaya & sekitarnya.',
     metaKeywords: 'instalasi listrik, SLO, NIDI, PJU, jasa listrik surabaya',
@@ -307,7 +307,7 @@ export const DEFAULT_SETTINGS = {
         tiktok: '',
     },
     // Operating hours
-    workingHours: 'Senin – Sabtu, 08:00 – 17:00 WIB',
+    workingHours: 'Senin â€“ Sabtu, 08:00 â€“ 17:00 WIB',
     // Company identity
     website: 'https://pt-adytia.com/',
     direktur: '',
@@ -353,7 +353,7 @@ export async function uploadCompanyLogo(file) {
     const compressed = await imageCompression(file, {
         maxSizeMB: 1,
         maxWidthOrHeight: 800,
-        useWebWorker: true,
+        useWebWorker: false,
     });
     const ext = file.name.split('.').pop() || 'png';
     const path = `settings/company-logo.${ext}`;

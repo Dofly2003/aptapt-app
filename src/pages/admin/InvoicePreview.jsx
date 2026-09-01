@@ -6,6 +6,7 @@ import { Printer, ArrowLeft, AlertCircle, Edit2, Download, Loader2 } from "lucid
 import { db } from "../../firebase/config";
 import TemplateInvoiceAdytia from "../../templates/invoice/TemplateInvoiceAdytia";
 import { exportLaporanPdf } from "../../utils/exportLaporanPdf";
+import { inlineImgsForPrint } from "../../utils/inlineImgsForPrint";
 
 const A4_WIDTH_PX = 794;
 
@@ -62,16 +63,21 @@ export default function InvoicePreview() {
   }, [data?.instansiId]);
 
   useEffect(() => {
+    let timer;
     const calc = () => {
       const wrapper = scrollWrapperRef.current;
       if (!wrapper) return;
       const available = wrapper.offsetWidth - 24;
       setScale(Math.min(available / A4_WIDTH_PX, 1));
     };
+    const debouncedCalc = () => { clearTimeout(timer); timer = setTimeout(calc, 150); };
     calc();
-    window.addEventListener("resize", calc);
-    return () => window.removeEventListener("resize", calc);
-  }, [data]);
+    window.addEventListener("resize", debouncedCalc);
+    return () => {
+      clearTimeout(timer);
+      window.removeEventListener("resize", debouncedCalc);
+    };
+  }, []);
 
   useEffect(() => {
     if (!innerRef.current) return;
@@ -82,9 +88,19 @@ export default function InvoicePreview() {
     return () => ro.disconnect();
   }, [data]);
 
+  const restoreImgs = useRef(null);
+
   const handlePrint = useReactToPrint({
     contentRef: printRef,
     documentTitle: `Invoice-${data?.nomor || data?.id || "dokumen"}`,
+    onBeforePrint: async () => {
+      if (!printRef.current) return;
+      restoreImgs.current = await inlineImgsForPrint(printRef.current);
+    },
+    onAfterPrint: () => {
+      restoreImgs.current?.();
+      restoreImgs.current = null;
+    },
     pageStyle: `
   @page { size: A4 portrait; margin: 0; }
   @media print {

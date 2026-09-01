@@ -1,4 +1,5 @@
 import { useEffect, useState, useMemo } from "react";
+import { logAction, logDownload } from "../../services/analyticsService";
 import { useNavigate } from "react-router-dom";
 import {
     Plus, FileText, Edit2, Trash2, Eye, Search, X,
@@ -7,7 +8,7 @@ import {
 import {
     AdminPageHeader, Button, EmptyState, useToast, Modal,
 } from "../../components/admin/AdminUI";
-import { getAllDokumen, deleteDokumen, formatRupiah, hitungTotal } from "../../services/rabService";
+import { getAllDokumen, deleteDokumen, formatRupiah, hitungTotalFromDoc } from "../../services/rabService";
 import { PermissionGate } from "../../components/PermissionGate";
 
 const STATUS_COLOR = {
@@ -87,7 +88,7 @@ export default function InvoiceManagement() {
         const rows = [
             ["Nomor", "Perihal", "Pelanggan", "Tanggal", "Jatuh Tempo", "Status", "Total (Rp)"],
             ...visible.map(i => {
-                const tot = hitungTotal(i.items, i.ppnAktif !== false).grandTotal || 0;
+                const tot = hitungTotalFromDoc(i).grandTotal || 0;
                 return [
                     i.nomor || "",
                     i.perihal || "",
@@ -105,6 +106,7 @@ export default function InvoiceManagement() {
         const a = document.createElement("a");
         a.href = url; a.download = `invoice-${new Date().toISOString().slice(0,10)}.csv`; a.click();
         URL.revokeObjectURL(url);
+        logDownload("invoice", "csv");
         show("CSV berhasil diunduh");
     };
 
@@ -123,9 +125,9 @@ export default function InvoiceManagement() {
     };
 
     const stats = useMemo(() => {
-        const total      = items.reduce((s, i) => s + (hitungTotal(i.items, i.ppnAktif !== false).grandTotal || 0), 0);
+        const total      = items.reduce((s, i) => s + (hitungTotalFromDoc(i).grandTotal || 0), 0);
         const lunasItems = items.filter(i => LUNAS.has(i.status));
-        const totalLunas = lunasItems.reduce((s, i) => s + (hitungTotal(i.items, i.ppnAktif !== false).grandTotal || 0), 0);
+        const totalLunas = lunasItems.reduce((s, i) => s + (hitungTotalFromDoc(i).grandTotal || 0), 0);
         const overdueCount = items.filter(i => isOverdue(i.jatuhTempo, i.status)).length;
         return { total, totalLunas, piutang: total - totalLunas, overdueCount, count: items.length, lunasCount: lunasItems.length };
     }, [items]);
@@ -148,8 +150,8 @@ export default function InvoiceManagement() {
         return [...filtered].sort((a, b) => {
             if (sort === "terbaru")  return (b.tanggal || b.createdAt || "") > (a.tanggal || a.createdAt || "") ? 1 : -1;
             if (sort === "terlama")  return (a.tanggal || a.createdAt || "") > (b.tanggal || b.createdAt || "") ? 1 : -1;
-            if (sort === "tertinggi") return (hitungTotal(b.items, b.ppnAktif !== false).grandTotal || 0) - (hitungTotal(a.items, a.ppnAktif !== false).grandTotal || 0);
-            if (sort === "terendah")  return (hitungTotal(a.items, a.ppnAktif !== false).grandTotal || 0) - (hitungTotal(b.items, b.ppnAktif !== false).grandTotal || 0);
+            if (sort === "tertinggi") return (hitungTotalFromDoc(b).grandTotal || 0) - (hitungTotalFromDoc(a).grandTotal || 0);
+            if (sort === "terendah")  return (hitungTotalFromDoc(a).grandTotal || 0) - (hitungTotalFromDoc(b).grandTotal || 0);
             return 0;
         });
     }, [items, filter, search, sort]);
@@ -177,7 +179,7 @@ export default function InvoiceManagement() {
                             </Button>
                         )}
                         <PermissionGate module="invoice" require="write_approval">
-                            <Button onClick={() => navigate("/Dashboard/invoice/baru")}>
+                            <Button onClick={() => { logAction("create_invoice"); navigate("/Dashboard/invoice/baru"); }}>
                                 <Plus className="w-4 h-4" /> Buat Invoice
                             </Button>
                         </PermissionGate>
@@ -292,7 +294,7 @@ export default function InvoiceManagement() {
                         : "Buat invoice pertama untuk mulai mencatat tagihan."}
                     action={!search && (
                         <PermissionGate module="invoice" require="write_approval">
-                            <Button onClick={() => navigate("/Dashboard/invoice/baru")}>
+                            <Button onClick={() => { logAction("create_invoice"); navigate("/Dashboard/invoice/baru"); }}>
                                 <Plus className="w-4 h-4" /> Buat Invoice
                             </Button>
                         </PermissionGate>
@@ -343,7 +345,7 @@ export default function InvoiceManagement() {
 }
 
 function InvoiceRow({ item, onEdit, onPreview, onDelete }) {
-    const totals  = hitungTotal(item.items, item.ppnAktif !== false);
+    const totals  = hitungTotalFromDoc(item);
     const tagihan = item.tagihan || {};
     const overdue = isOverdue(item.jatuhTempo, item.status);
     const statusKey = overdue ? "overdue" : (item.status || "draft");

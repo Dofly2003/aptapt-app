@@ -1,7 +1,8 @@
 import { useEffect, useState, useMemo } from "react";
+import { logAction } from "../../services/analyticsService";
 import { db, firebaseConfig } from "../../firebase/config";
 import {
-  collection, getDocs, doc, deleteDoc, setDoc, updateDoc, query, where,
+  collection, getDocs, doc, deleteDoc, setDoc, updateDoc, query, where, getDoc,
 } from "firebase/firestore";
 import {
   getAuth, createUserWithEmailAndPassword, sendPasswordResetEmail,
@@ -10,6 +11,7 @@ import { initializeApp, getApps } from "firebase/app";
 import {
   Search, Plus, Edit2, KeyRound, Trash2, RefreshCw, X,
   ShieldCheck, UserCheck, UserX, Users as UsersIcon, Eye, EyeOff,
+  ArrowRightLeft, CheckCircle2, AlertCircle,
 } from "lucide-react";
 import { Modal, useToast } from "../../components/admin/AdminUI";
 
@@ -127,6 +129,11 @@ function UserFormModal({ open, onClose, onSaved, editUser = null, existingUsers 
         await updateDoc(doc(db, "users", editUser.id), {
           name: name.trim(), username: username.trim(), role, disabled,
         });
+        // Perbarui username index jika username berubah
+        if (username.trim() !== editUser.username) {
+          if (editUser.username) await deleteDoc(doc(db, "usernames", editUser.username));
+          await setDoc(doc(db, "usernames", username.trim()), { email: editUser.email, uid: editUser.id });
+        }
         show("Data pengguna diperbarui.");
       } else {
         const cred = await createUserWithEmailAndPassword(secondaryAuth, email.trim(), password);
@@ -134,6 +141,9 @@ function UserFormModal({ open, onClose, onSaved, editUser = null, existingUsers 
           name: name.trim(), username: username.trim(),
           email: email.trim(), role, disabled: false, createdAt: new Date(),
         });
+        // Tulis ke username index agar login dengan username bisa bekerja
+        await setDoc(doc(db, "usernames", username.trim()), { email: email.trim(), uid: cred.user.uid });
+        logAction("add_user", { role });
         show("Pengguna berhasil dibuat.");
       }
       onSaved();
@@ -231,6 +241,8 @@ export default function Users() {
   const [editTarget, setEditTarget] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [resettingPw, setResettingPw]   = useState(null);
+  const [syncingUsernames, setSyncingUsernames] = useState(false);
+  const [syncResult, setSyncResult]             = useState(null);
 
   /* ── Load ── */
   const loadUsers = async () => {
@@ -284,7 +296,9 @@ export default function Users() {
     if (!deleteTarget) return;
     try {
       await deleteDoc(doc(db, "users", deleteTarget.id));
-      show("Pengguna dihapus.");
+      if (deleteTarget.username) await deleteDoc(doc(db, "usernames", deleteTarget.username));
+      logAction("delete_user", { role: deleteTarget.role });
+      show("Pengguna dihapus. Catatan: akun Firebase Auth masih aktif — hapus manual di Firebase Console jika ingin mendaur ulang email ini.");
       setDeleteTarget(null);
       loadUsers();
     } catch { show("Gagal menghapus pengguna.", "error"); }
@@ -299,6 +313,25 @@ export default function Users() {
     } catch (err) { show(fbErr(err), "error"); }
   };
 
+  const handleSyncUsernames = async () => {
+    setSyncingUsernames(true);
+    setSyncResult(null);
+    let written = 0, skipped = 0, failed = 0;
+
+    for (const u of users) {
+      if (!u.username || !u.email) { skipped++; continue; }
+      try {
+        await setDoc(doc(db, "usernames", u.username), { email: u.email, uid: u.id });
+        written++;
+      } catch {
+        failed++;
+      }
+    }
+
+    setSyncingUsernames(false);
+    setSyncResult({ written, skipped, failed, total: users.length });
+  };
+
   const handleToggleDisable = async (user) => {
     try {
       await updateDoc(doc(db, "users", user.id), { disabled: !user.disabled });
@@ -311,9 +344,9 @@ export default function Users() {
       <Toast />
 
       {/* ── Header ── */}
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900">Manajemen Pengguna</h1>
+      <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h1 className="text-xl sm:text-2xl font-bold text-slate-900">Manajemen Pengguna</h1>
           <p className="text-sm text-slate-500 mt-1">Kelola akun dan hak akses pengguna sistem</p>
         </div>
         <div className="flex items-center gap-2 shrink-0">
@@ -321,6 +354,14 @@ export default function Users() {
             className="p-2 text-slate-500 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors"
             title="Refresh">
             <RefreshCw className="w-4 h-4" />
+          </button>
+          <button
+            onClick={handleSyncUsernames}
+            disabled={syncingUsernames || loading}
+            title="Sinkronkan koleksi 'usernames' agar semua akun lama bisa login dengan username"
+            className="flex items-center gap-1.5 px-3 py-2 border border-violet-300 bg-violet-50 hover:bg-violet-100 disabled:opacity-50 text-violet-700 text-sm font-semibold rounded-lg transition-colors">
+            <ArrowRightLeft className={`w-4 h-4 ${syncingUsernames ? "animate-spin" : ""}`} />
+            <span className="hidden sm:inline">{syncingUsernames ? "Menyinkronkan..." : "Sync Username"}</span>
           </button>
           <button
             onClick={() => setShowCreate(true)}
@@ -536,6 +577,51 @@ export default function Users() {
             </button>
           </div>
         </div>
+      </Modal>
+
+      {/* Sync username result */}
+      <Modal open={!!syncResult} onClose={() => setSyncResult(null)} title="Hasil Sinkronisasi Username" size="sm">
+        {syncResult && (
+          <div className="space-y-4">
+            <div className={`flex items-start gap-3 p-4 rounded-xl border ${
+              syncResult.failed > 0
+                ? "bg-red-50 border-red-200"
+                : "bg-emerald-50 border-emerald-200"
+            }`}>
+              {syncResult.failed > 0
+                ? <AlertCircle className="w-5 h-5 text-red-500 mt-0.5 shrink-0" />
+                : <CheckCircle2 className="w-5 h-5 text-emerald-600 mt-0.5 shrink-0" />}
+              <p className={`text-sm font-semibold ${syncResult.failed > 0 ? "text-red-800" : "text-emerald-800"}`}>
+                {syncResult.failed > 0 ? "Sinkronisasi selesai dengan beberapa error" : "Sinkronisasi berhasil"}
+              </p>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3 text-center">
+                <div className="text-2xl font-bold text-emerald-700">{syncResult.written}</div>
+                <div className="text-xs text-emerald-600 font-medium mt-0.5">Akun diperbarui</div>
+              </div>
+              <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 text-center">
+                <div className="text-2xl font-bold text-slate-500">{syncResult.skipped}</div>
+                <div className="text-xs text-slate-500 font-medium mt-0.5">Dilewati (tanpa username/email)</div>
+              </div>
+              {syncResult.failed > 0 && (
+                <div className="bg-red-50 border border-red-200 rounded-xl p-3 text-center col-span-2">
+                  <div className="text-2xl font-bold text-red-600">{syncResult.failed}</div>
+                  <div className="text-xs text-red-500 font-medium mt-0.5">Gagal (cek koneksi / rules)</div>
+                </div>
+              )}
+            </div>
+            <p className="text-xs text-slate-500">
+              Total {syncResult.total} pengguna diproses. Sekarang semua akun yang punya username dan email dapat login menggunakan username.
+            </p>
+            <div className="flex justify-end">
+              <button onClick={() => setSyncResult(null)}
+                className="px-4 py-2 text-sm rounded-lg bg-slate-800 hover:bg-slate-700 text-white font-semibold">
+                Tutup
+              </button>
+            </div>
+          </div>
+        )}
       </Modal>
 
       {/* Reset password confirm */}

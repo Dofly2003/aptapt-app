@@ -1,7 +1,7 @@
 import { useEffect, useState, useContext } from "react";
 import { useNavigate } from "react-router-dom";
 import { db, auth } from "../../firebase/config";
-import { collection, onSnapshot, doc } from "firebase/firestore";
+import { collection, onSnapshot, doc, query, where, limit } from "firebase/firestore";
 import { AuthContext } from "../../context/AuthContext";
 import {
   Wallet, Package, FileText, Receipt,
@@ -19,7 +19,8 @@ const ALL_MODULES = [
   { id: "invoice",   label: "Invoice",        desc: "Tagihan & pembayaran",               path: "/app-mobile/invoice",   Icon: Receipt,      color: "bg-purple-50 text-purple-600",roles: ["admin","superadmin","finance"] },
   { id: "pengujian", label: "Form Pengujian", desc: "NIDI & SLO field",                   path: "/app-mobile/form-pengujian", Icon: ClipboardList, color: "bg-cyan-50 text-cyan-600", roles: ["admin","superadmin","finance","editor","user"] },
   { id: "catatan",    label: "Catatan",        desc: "Catatan lapangan",                   path: "/app-mobile/notes",        Icon: StickyNote,    color: "bg-rose-50 text-rose-600",    roles: ["admin","superadmin","finance","editor","user"] },
-  { id: "alat-kerja", label: "Alat Kerja",    desc: "Inventaris alat lapangan & bengkel", path: "/app-mobile/alat-kerja",   Icon: Wrench,        color: "bg-orange-50 text-orange-600", roles: ["admin","superadmin"] },
+  { id: "alat-kerja",        label: "Alat Kerja",        desc: "Inventaris alat lapangan & bengkel", path: "/app-mobile/alat-kerja",         Icon: Wrench,        color: "bg-orange-50 text-orange-600", roles: ["admin","superadmin"] },
+  { id: "maintenance-gardu", label: "Maintenance Gardu", desc: "Laporan pemeliharaan gardu pelanggan", path: "/app-mobile/maintenance-gardu", Icon: Layers,        color: "bg-teal-50 text-teal-600",    roles: ["admin","superadmin","user"] },
 ];
 
 export default function MobileHome() {
@@ -48,9 +49,11 @@ export default function MobileHome() {
 
   /* WO aktif */
   useEffect(() => {
-    const unsub = onSnapshot(collection(db, "work_orders"), (snap) => {
-      setWoAktif(snap.docs.filter(d => d.data().status !== "done").length);
-    }, () => {});
+    const unsub = onSnapshot(
+      query(collection(db, "work_orders"), where("status", "!=", "done"), limit(100)),
+      (snap) => {
+        setWoAktif(snap.docs.length);
+      }, () => {});
     return () => unsub();
   }, []);
 

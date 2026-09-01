@@ -52,10 +52,12 @@ export default function PembumianSection({
 
         return (
           <div key={idx} className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-            <button
-              type="button"
-              className="w-full flex items-center justify-between p-3 active:bg-gray-50 transition text-left"
+            <div
+              role="button"
+              tabIndex={0}
+              className="w-full flex items-center justify-between p-3 active:bg-gray-50 transition text-left cursor-pointer"
               onClick={() => setOpenIndex(isOpen ? null : idx)}
+              onKeyDown={(e) => e.key === "Enter" && setOpenIndex(isOpen ? null : idx)}
             >
               <div className="text-sm font-semibold text-gray-800 truncate">{rowName}</div>
               <div className="flex items-center gap-2 flex-shrink-0">
@@ -68,7 +70,7 @@ export default function PembumianSection({
                 </button>
                 <span className="text-gray-400 text-sm">{isOpen ? "▲" : "▼"}</span>
               </div>
-            </button>
+            </div>
 
             {isOpen && (
               <div className="px-3 pb-3 border-t border-gray-50 space-y-2 mt-1">

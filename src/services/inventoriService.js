@@ -1,9 +1,9 @@
-import { db, storage } from "../firebase/config";
+import { db } from "../firebase/config";
 import {
   collection, doc, getDocs, addDoc, updateDoc, deleteDoc,
   serverTimestamp, query, orderBy,
 } from "firebase/firestore";
-import { ref, uploadBytes, getDownloadURL, deleteObject } from "firebase/storage";
+import { uploadViaPresign, deleteRemote } from "../firebase/secureStorage";
 import imageCompression from "browser-image-compression";
 
 export function formatRupiah(n) {
@@ -65,13 +65,11 @@ export async function uploadBarangPhoto(file, docId) {
     useWebWorker: false,
   });
   const path = `inventori/${docId}/foto_${Date.now()}.jpg`;
-  const r = ref(storage, path);
-  await uploadBytes(r, compressed);
-  const url = await getDownloadURL(r);
-  return { url, path };
+  await uploadViaPresign(path, compressed, "image/jpeg");
+  return { url: "", path }; // shape {url,path} tetap; url kosong -> render pakai fotoPath via useSecurePhotoUrls
 }
 
 export async function deleteBarangPhoto(path) {
   if (!path) return;
-  try { await deleteObject(ref(storage, path)); } catch {}
+  await deleteRemote(path);
 }

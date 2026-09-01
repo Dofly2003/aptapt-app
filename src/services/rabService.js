@@ -88,6 +88,16 @@ async function bumpCounter(type, tanggal) {
   });
 }
 
+// ============ MARKUP (untuk auto-fill harga RAB baru dari master_harga) ============
+export const MARKUP_PERCENT = 7;
+
+/** Bulatkan harga setelah dikalikan markup ke kelipatan Rp 50 terdekat. */
+export function applyMarkup(price, percent = MARKUP_PERCENT) {
+  const raw = Number(price) || 0;
+  const marked = raw * (1 + percent / 100);
+  return Math.round(marked / 50) * 50;
+}
+
 // ============ HELPERS ============
 export function formatRupiah(num) {
   const n = Number(num) || 0;
@@ -119,6 +129,40 @@ export function newItem() {
   };
 }
 
+export function newGroup(nama = "Pekerjaan Baru") {
+  return {
+    id: `grp_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+    nama,
+    items: [newItem()],
+  };
+}
+
+export function hitungSubtotalGroup(items) {
+  return (items || []).reduce(
+    (s, it) => s + (Number(it.volume) || 0) * (Number(it.hargaSatuan) || 0), 0
+  );
+}
+
+export function hitungTotalGroups(groups, ppnAktif, ppnPersen = 11) {
+  const subtotal = (groups || []).reduce(
+    (t, grp) => t + hitungSubtotalGroup(grp.items), 0
+  );
+  const ppn = ppnAktif ? Math.round(subtotal * (ppnPersen / 100)) : 0;
+  return { subtotal, ppn, grandTotal: subtotal + ppn };
+}
+
+// Extracts all items from a doc regardless of format (groups or legacy items array)
+export function getDocItems(doc) {
+  if (doc?.groups?.length) return doc.groups.flatMap(g => g.items || []);
+  return doc?.items || [];
+}
+
+// Compute totals from a doc in either format
+export function hitungTotalFromDoc(doc, ppnPersen = 11) {
+  const ppnAktif = doc?.ppnAktif !== false;
+  return hitungTotal(getDocItems(doc), ppnAktif, ppnPersen);
+}
+
 export const SATUAN_OPTIONS = [
   "pcs", "Pcs", "m", "m²", "m³", "kg", "ltr", "set", "unit", "pack", "lot", "ls", "btg", "rol",
 ];
@@ -132,7 +176,7 @@ export const DEFAULT_CLOSING = {
 export const DEFAULT_PEMBUKAAN =
   "Dengan hormat,\n\nBersama surat ini kami mengajukan penawaran harga untuk pekerjaan sebagaimana tersebut pada perihal di atas. Adapun rincian biaya pekerjaan adalah sebagai berikut:";
 
-export const DEFAULT_MASA_BERLAKU = "30 (tiga puluh) hari kerja sejak tanggal surat ini";
+export const DEFAULT_MASA_BERLAKU = "7 (tujuh) hari sejak tanggal surat ini";
 
 /** Mengubah angka menjadi terbilang Bahasa Indonesia */
 export function terbilang(num) {

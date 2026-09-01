@@ -4,7 +4,7 @@ import { getDoc, doc } from "firebase/firestore";
 import { db } from "../../firebase/config";
 import { AuthContext } from "../../context/AuthContext";
 import {
-  getAllDokumen, deleteDokumen, formatRupiah, hitungTotal,
+  getAllDokumen, deleteDokumen, formatRupiah, hitungTotalFromDoc,
 } from "../../services/rabService";
 import TemplateRabAdytia from "../../templates/rab/TemplateRabAdytia";
 import OfflineBanner from "../../offline/OfflineBanner";
@@ -127,10 +127,15 @@ export default function MobileRab() {
 
   /* ── responsive scale ── */
   useEffect(() => {
+    let timer;
     const calc = () => setPreviewScale(Math.min((window.innerWidth - 16) / 794, 1));
+    const debouncedCalc = () => { clearTimeout(timer); timer = setTimeout(calc, 150); };
     calc();
-    window.addEventListener("resize", calc);
-    return () => window.removeEventListener("resize", calc);
+    window.addEventListener("resize", debouncedCalc);
+    return () => {
+      clearTimeout(timer);
+      window.removeEventListener("resize", debouncedCalc);
+    };
   }, []);
 
   /* ── Android back closes preview overlay ── */
@@ -233,7 +238,7 @@ export default function MobileRab() {
         )}
 
         {visible.map(item => {
-          const totals = hitungTotal(item.items, item.ppnAktif !== false);
+          const totals = hitungTotalFromDoc(item);
           return (
             <div key={item.id} className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
               <div className="p-4">

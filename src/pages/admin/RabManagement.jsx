@@ -1,10 +1,11 @@
 import { useEffect, useState, useContext } from "react";
+import { logAction } from "../../services/analyticsService";
 import { Link, useNavigate } from "react-router-dom";
 import { Plus, FileText, Edit2, Trash2, Eye } from "lucide-react";
 import {
     AdminPageHeader, Button, EmptyState, useToast,
 } from "../../components/admin/AdminUI";
-import { getAllDokumen, deleteDokumen, formatRupiah, hitungTotal } from "../../services/rabService";
+import { getAllDokumen, deleteDokumen, formatRupiah, hitungTotalFromDoc } from "../../services/rabService";
 import { AuthContext } from "../../context/AuthContext";
 import { PermissionGate } from "../../components/PermissionGate";
 
@@ -36,6 +37,7 @@ export default function RabManagement() {
         if (!confirm(`Hapus RAB "${item.perihal}" (${item.nomor})?`)) return;
         try {
             await deleteDokumen(item.id);
+            logAction("delete_rab");
             show("Terhapus");
             load();
         } catch (err) { console.error(err); show("Gagal menghapus", "error"); }
@@ -51,7 +53,7 @@ export default function RabManagement() {
                 description="Kelola dokumen RAB. Setiap dokumen terikat ke satu instansi (letterhead) dan satu penanggung jawab (TTD)."
                 actions={
                     <PermissionGate module="rab" require="write_approval">
-                        <Button onClick={() => navigate("/Dashboard/rab/baru")}>
+                        <Button onClick={() => { logAction("create_rab"); navigate("/Dashboard/rab/baru"); }}>
                             <Plus className="w-4 h-4" /> Buat RAB
                         </Button>
                     </PermissionGate>
@@ -115,7 +117,7 @@ export default function RabManagement() {
 }
 
 function RabRow({ item, onEdit, onPreview, onDelete }) {
-  const totals = hitungTotal(item.items, item.ppnAktif !== false);
+  const totals = hitungTotalFromDoc(item);
   return (
     <div className="bg-white border border-slate-200 rounded-xl p-3 sm:p-4 hover:border-amber-300 transition">
       <div className="flex items-start gap-3">

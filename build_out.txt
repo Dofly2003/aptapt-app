@@ -1,0 +1,24 @@
+[36mvite v7.3.6 [32mbuilding client environment for production...[36m[39m
+transforming...
+[32m✓[39m 3942 modules transformed.
+rendering chunks...
+computing gzip size...
+[2mdist/[22m[32mindex.html                            [39m[1m[2m    0.94 kB[22m[1m[22m[2m │ gzip:     0.51 kB[22m
+[2mdist/[22m[32massets/pdf.worker.min-FHbmGBN0.mjs    [39m[1m[2m1,244.25 kB[22m[1m[22m
+[2mdist/[22m[35massets/index-DIDM2M02.css             [39m[1m[2m  149.25 kB[22m[1m[22m[2m │ gzip:    23.70 kB[22m
+[2mdist/[22m[36massets/index-ByZj7V0q.js              [39m[1m[2m    0.43 kB[22m[1m[22m[2m │ gzip:     0.28 kB[22m
+[2mdist/[22m[36massets/index-BzHp2Cy1.js              [39m[1m[2m    0.46 kB[22m[1m[22m[2m │ gzip:     0.29 kB[22m
+[2mdist/[22m[36massets/index-BQ5Xkc5F.js              [39m[1m[2m    0.58 kB[22m[1m[22m[2m │ gzip:     0.29 kB[22m
+[2mdist/[22m[36massets/web-DqFYXpcF.js                [39m[1m[2m    0.92 kB[22m[1m[22m[2m │ gzip:     0.39 kB[22m
+[2mdist/[22m[36massets/web-BKheoEdX.js                [39m[1m[2m    1.37 kB[22m[1m[22m[2m │ gzip:     0.58 kB[22m
+[2mdist/[22m[36massets/web-CBWRV0XT.js                [39m[1m[2m    2.07 kB[22m[1m[22m[2m │ gzip:     0.70 kB[22m
+[2mdist/[22m[36massets/index-DX0TIfSM.js              [39m[1m[2m    3.58 kB[22m[1m[22m[2m │ gzip:     1.09 kB[22m
+[2mdist/[22m[36massets/web-DT-mMeCI.js                [39m[1m[2m   18.59 kB[22m[1m[22m[2m │ gzip:     4.25 kB[22m
+[2mdist/[22m[36massets/web-DYvqmAsF.js                [39m[1m[2m   24.18 kB[22m[1m[22m[2m │ gzip:     3.40 kB[22m
+[2mdist/[22m[36massets/RLODocument-DsdI-vNq.js        [39m[1m[2m   32.03 kB[22m[1m[22m[2m │ gzip:     4.84 kB[22m
+[2mdist/[22m[36massets/index.es-D9LuCgRm.js           [39m[1m[2m  360.18 kB[22m[1m[22m[2m │ gzip:    75.45 kB[22m
+[2mdist/[22m[36massets/index-B-dtpbx2.js              [39m[1m[33m  743.81 kB[39m[22m[2m │ gzip:   133.88 kB[22m
+[2mdist/[22m[36massets/pdf-COsEMlKL.js                [39m[1m[33m  802.06 kB[39m[22m[2m │ gzip:   164.90 kB[22m
+[2mdist/[22m[36massets/react-pdf.browser-yXx8XXT8.js  [39m[1m[33m2,729.49 kB[39m[22m[2m │ gzip:   605.07 kB[22m
+[2mdist/[22m[36massets/index-BUPgYUPM.js              [39m[1m[33m8,595.84 kB[39m[22m[2m │ gzip: 1,721.43 kB[22m
+[32m✓ built in 19.92s[39m

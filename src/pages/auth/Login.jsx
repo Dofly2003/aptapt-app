@@ -13,10 +13,6 @@ import {
 } from "firebase/auth";
 
 import {
-  collection,
-  query,
-  where,
-  getDocs,
   doc,
   getDoc,
   setDoc
@@ -25,9 +21,9 @@ import {
 import { useNavigate } from "react-router-dom";
 
 const ERROR_MESSAGES = {
-  "auth/invalid-credential": "Email atau password salah.",
+  "auth/invalid-credential": "Username / email atau password salah.",
   "auth/wrong-password": "Password salah.",
-  "auth/user-not-found": "Email tidak terdaftar.",
+  "auth/user-not-found": "Akun tidak ditemukan.",
   "auth/invalid-email": "Format email tidak valid.",
   "auth/user-disabled": "Akun ini telah dinonaktifkan.",
   "auth/too-many-requests": "Terlalu banyak percobaan. Coba lagi beberapa saat.",
@@ -96,7 +92,7 @@ function Login() {
       }
 
       const lastProject = localStorage.getItem("lastProjectId");
-      if (lastProject && /^[a-zA-Z0-9_-]+$/.test(lastProject)) {
+      if (lastProject && /^[a-zA-Z0-9_-]+$/.test(lastProject) && userData.role !== "guest") {
         navigate(`/app-mobile/form-pengujian/${lastProject}`);
         return;
       }
@@ -132,6 +128,7 @@ function Login() {
       let emailLogin = identifier;
 
       if (!identifier.includes("@")) {
+        // Coba sebagai akun tamu terlebih dahulu (email format: username@guest.adytia-pt.web.app)
         const guestEmail = `${identifier}@guest.adytia-pt.web.app`;
         try {
           const guestRes = await signInWithEmailAndPassword(auth, guestEmail, password);
@@ -139,23 +136,24 @@ function Login() {
           setLoading(false);
           return;
         } catch (guestErr) {
-          const guestNotFound = ["auth/user-not-found", "auth/invalid-email", "auth/invalid-credential"].includes(guestErr.code);
-          if (!guestNotFound) {
+          // Jika error bukan "akun tidak ada", berarti password salah untuk guest → tampilkan error
+          const accountMissing = ["auth/user-not-found", "auth/invalid-email", "auth/invalid-credential"].includes(guestErr.code);
+          if (!accountMissing) {
             setError(ERROR_MESSAGES[guestErr.code] || "Login gagal. Silakan coba lagi.");
             setLoading(false);
             return;
           }
         }
 
+        // Cari email di index username (koleksi usernames — bisa dibaca tanpa login)
         try {
-          const q = query(collection(db, "users"), where("username", "==", identifier));
-          const snap = await getDocs(q);
-          if (snap.empty) {
+          const usernameDoc = await getDoc(doc(db, "usernames", identifier));
+          if (!usernameDoc.exists()) {
             setError("Username tidak ditemukan.");
             setLoading(false);
             return;
           }
-          emailLogin = snap.docs[0].data().email;
+          emailLogin = usernameDoc.data().email;
         } catch {
           setError("Username tidak ditemukan.");
           setLoading(false);

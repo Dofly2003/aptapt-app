@@ -42,7 +42,12 @@ function addDays(date, n) {
   return d;
 }
 
-function toStr(date) { return date.toISOString().slice(0, 10); }
+function toStr(date) {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
 
 function fmtShort(date) {
   return `${date.getDate()} ${BULAN[date.getMonth()]}`;
@@ -79,12 +84,7 @@ export default function JadwalProyek() {
     return () => { cancelled = true; };
   }, [weekStart, reload]);
 
-  const teams = useMemo(() => {
-    const set = new Set(events.map(e => e.namaTim));
-    return [...set].sort();
-  }, [events]);
-
-  const allTeamNames = useMemo(() => [...new Set(events.map(e => e.namaTim))], [events]);
+  const teams = useMemo(() => [...new Set(events.map(e => e.namaTim))].sort(), [events]);
 
   function getCellEvents(namaTim, dateStr) {
     return events.filter(e => e.namaTim === namaTim && e.tanggal === dateStr);
@@ -326,7 +326,7 @@ export default function JadwalProyek() {
         size="sm"
       >
         <datalist id="jadwal-team-list">
-          {allTeamNames.map(n => <option key={n} value={n} />)}
+          {teams.map(n => <option key={n} value={n} />)}
         </datalist>
 
         <Field label="Nama Tim" required>

@@ -1,6 +1,6 @@
 import { useState, useEffect, useContext } from "react";
 import { db } from "../../firebase/config";
-import { collection, onSnapshot, getDocs } from "firebase/firestore";
+import { collection, onSnapshot, getDocs, query, orderBy, limit } from "firebase/firestore";
 import { AuthContext } from "../../context/AuthContext";
 import {
   Building2, CheckCircle2, Clock, Layers, Timer, Activity,
@@ -63,7 +63,7 @@ function Dashboard() {
 
   /* WO realtime */
   useEffect(() => {
-    const unsub = onSnapshot(collection(db, "nidi_data"), (snap) => {
+    const unsub = onSnapshot(query(collection(db, "nidi_data"), orderBy("createdAt", "desc"), limit(500)), (snap) => {
       const docs = snap.docs.map(d => d.data());
       setWoTotal(docs.length);
       setWoProgress(docs.filter(d => d.status === "process").length);

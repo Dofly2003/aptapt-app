@@ -4,6 +4,17 @@
     "n": "webdashboardptapt",
     "dino": "adytia-pt"
   },
-  "targets": {},
+  "targets": {
+    "adytia-pt": {
+      "hosting": {
+        "main": [
+          "adytia-pt"
+        ],
+        "monitoring": [
+          "adytia-monitoring"
+        ]
+      }
+    }
+  },
   "etags": {}
 }

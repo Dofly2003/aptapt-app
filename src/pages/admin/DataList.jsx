@@ -1,6 +1,6 @@
 import { useEffect, useState, useMemo, useContext } from "react";
 import { useNavigate } from "react-router-dom";
-import { db, auth } from "../../firebase/config";
+import { db } from "../../firebase/config";
 import {
   collection,
   query,
@@ -11,7 +11,6 @@ import {
   serverTimestamp,
   deleteDoc
 } from "firebase/firestore";
-import { onAuthStateChanged } from "firebase/auth";
 import { AuthContext } from "../../context/AuthContext";
 import {
   AdminPageHeader,
@@ -49,11 +48,10 @@ const formatMonth = (key) => {
 function TableDataEntry() {
   const navigate = useNavigate();
   const { show, Toast } = useToast();
-  const { role: authRole } = useContext(AuthContext);
+  const { role: authRole, user } = useContext(AuthContext);
 
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [user, setUser] = useState(null);
 
   const [holdRow, setHoldRow] = useState(null);
   const [holdProgress, setHoldProgress] = useState(0);
@@ -62,11 +60,6 @@ function TableDataEntry() {
   const [selectedItem, setSelectedItem] = useState(null);
   const [search, setSearch] = useState("");
   const [rekapMonth, setRekapMonth] = useState("");
-
-  useEffect(() => {
-    const unsub = onAuthStateChanged(auth, (u) => setUser(u));
-    return () => unsub();
-  }, []);
 
   // Gunakan role dari Firestore (via AuthContext) — bukan email hardcoded
   const isSuperAdmin = authRole === "superadmin";

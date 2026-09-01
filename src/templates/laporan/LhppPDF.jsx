@@ -1034,8 +1034,8 @@ export default function LhppPDF({ data = {}, instansi = {} }) {
       {/* ════ A.1 — PHB TM ═════════════════════════════════════════════════════ */}
       <LhppPage {...fp} code="A.1" title="SPESIFIKASI TEKNIK PHB TM">
         <NameplateTable rows={[
-          ["Spesifikasi",     gf(form,"part1.phb_tm.spesifikasi.spesifikasi")],
-          ["Tahun Pembuatan", gf(form,"part1.phb_tm.spesifikasi.tahun")],
+          ["Spesifikasi",     gf(form,"part1.phb_tm.incoming.spesifikasi") || gf(form,"part1.phb_tm.spesifikasi.spesifikasi")],
+          ["Tahun Pembuatan", gf(form,"part1.phb_tm.incoming.tahun")        || gf(form,"part1.phb_tm.spesifikasi.tahun")],
           ["Merk",            gf(form,"part1.phb_tm.incoming.merk")],
           ["Tipe",            gf(form,"part1.phb_tm.incoming.tipe")],
           ["Jenis Pemutus",   gf(form,"part1.phb_tm.incoming.jenisPemutus")],
@@ -1044,21 +1044,21 @@ export default function LhppPDF({ data = {}, instansi = {} }) {
         ]} />
         <PhotoRow items={[
           { label:"Foto Nameplate PHB TM", url: gp(photos,"part1","phb_tm.incoming")[1] },
-          { label:"Foto Full PHB TM",      url: gp(photos,"part1","phb_tm.spesifikasi")[0] },
+          { label:"Foto Full PHB TM",      url: gp(photos,"part1","phb_tm.foto_full_phbtm")[0] || gp(photos,"part1","phb_tm.incoming")[3] || gp(photos,"part1","phb_tm.spesifikasi")[0] },
         ]} />
       </LhppPage>
 
       {/* ════ A.2 — Saluran TM ═════════════════════════════════════════════════ */}
       <LhppPage {...fp} code="A.2" title="SPESIFIKASI TEKNIK SALURAN TM">
         <NameplateTable rows={[
-          ["Merk",        gf(form,"part1.phb_tm.kabel_sktm.merk")],
-          ["Tipe / Jenis",gf(form,"part1.phb_tm.kabel_sktm.tipe")],
-          ["Ukuran",      gf(form,"part1.phb_tm.kabel_sktm.ukuran")],
-          ["Panjang (m)", gf(form,"part1.phb_tm.kabel_sktm.panjang")],
+          ["Merk",        gf(form,"part1.phb_tm.kabel_incoming.merk")        || gf(form,"part1.phb_tm.kabel_sktm.merk")],
+          ["Tipe / Jenis",gf(form,"part1.phb_tm.kabel_incoming.tipe")        || gf(form,"part1.phb_tm.kabel_sktm.tipe")],
+          ["Ukuran",      gf(form,"part1.phb_tm.kabel_incoming.ukuran")      || gf(form,"part1.phb_tm.kabel_sktm.ukuran")],
+          ["Panjang (m)", gf(form,"part1.phb_tm.kabel_incoming.panjang")     || gf(form,"part1.phb_tm.kabel_sktm.panjang")],
         ].filter(([, v]) => v && v !== "-")} />
         <PhotoRow items={[
-          { label:"Foto Nameplate Kabel TM", url: gp(photos,"part1","phb_tm.kabel_sktm")[0] },
-          { label:"Foto Jalur Kabel TM",     url: gp(photos,"part1","phb_tm.kabel_sktm")[1] },
+          { label:"Foto Nameplate Kabel TM", url: gp(photos,"part1","phb_tm.kabel_incoming")[0] || gp(photos,"part1","phb_tm.kabel_sktm")[0] },
+          { label:"Foto Jalur Kabel TM",     url: gp(photos,"part1","phb_tm.kabel_incoming")[1] || gp(photos,"part1","phb_tm.kabel_sktm")[1] },
         ]} />
       </LhppPage>
 
@@ -1113,8 +1113,8 @@ export default function LhppPDF({ data = {}, instansi = {} }) {
       {/* ════ B.1 — Konstruksi ═════════════════════════════════════════════════ */}
       <LhppPage {...fp} code="B.1" title="KONSTRUKSI">
         <PhotoGrid items={[
-          { label:"PHB TM",     url: gp(photos,"part1","phb_tm.spesifikasi")[0] },
-          { label:"Saluran TM", url: gp(photos,"part1","phb_tm.kabel_sktm")[0] },
+          { label:"PHB TM",     url: gp(photos,"part1","phb_tm.foto_full_phbtm")[0] || gp(photos,"part1","phb_tm.incoming")[3] || gp(photos,"part1","phb_tm.spesifikasi")[0] },
+          { label:"Saluran TM", url: gp(photos,"part1","phb_tm.kabel_incoming")[0] || gp(photos,"part1","phb_tm.kabel_sktm")[0] },
           { label:"Trafo",      url: gp(photos,"part1","trafo.nameplate")[0] },
           { label:"Kabel TR",   url: gp(photos,"part1","phb_tr.kabel_tr")[0] },
           { label:"PHB TR",     url: gp(photos,"part1","phb_tr.phb_tr_full")[0] },

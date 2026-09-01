@@ -103,6 +103,43 @@ export function migrateFormData(rawFormData, rawPhotos) {
     }
   }
 
+  // ── spesifikasi group → incoming fields + foto_full_phbtm photo ─────
+  // Old schema had a separate "spesifikasi" group under phb_tm with
+  // { spesifikasi, tahun } fields and a photo ("Foto Full PHB TM").
+  // New schema: those fields live inside "incoming"; photo → foto_full_phbtm.
+  if (phb.spesifikasi && typeof phb.spesifikasi === "object" && !Array.isArray(phb.spesifikasi)) {
+    const oldSpec = phb.spesifikasi;
+    if (!phb.incoming) phb.incoming = {};
+    if (!phb.incoming.spesifikasi && oldSpec.spesifikasi)
+      phb.incoming.spesifikasi = oldSpec.spesifikasi;
+    if (!phb.incoming.tahun && oldSpec.tahun)
+      phb.incoming.tahun = oldSpec.tahun;
+  }
+  // Move old spesifikasi photo → foto_full_phbtm
+  migratePhotoKeyRename(ph.part1, "phb_tm.spesifikasi", "phb_tm.foto_full_phbtm");
+
+  // ── kabel_sktm → kabel_incoming (form data) ─────────────────────────
+  // Old schema used key "kabel_sktm"; new schema uses "kabel_incoming"
+  if (phb.kabel_sktm && !phb.kabel_incoming) {
+    phb.kabel_incoming = { ...phb.kabel_sktm };
+    delete phb.kabel_sktm;
+  }
+
+  // ── kabel_sktm photos → kabel_incoming photos ────────────────────────
+  migratePhotoKeyRename(ph.part1, "phb_tm.kabel_sktm", "phb_tm.kabel_incoming");
+
+  // ── incoming[3] → foto_full_phbtm[0] ─────────────────────────────────
+  // Old schema: incoming had 4 slots; slot [3] was "Foto Full PHB TM"
+  // New schema: foto_full_phbtm is a separate group with 1 slot
+  const incomingPhotos = ph.part1["phb_tm.incoming"];
+  if (Array.isArray(incomingPhotos) && incomingPhotos.length >= 4) {
+    const fullPhoto = incomingPhotos[3];
+    if (fullPhoto && !ph.part1["phb_tm.foto_full_phbtm"]?.length) {
+      ph.part1["phb_tm.foto_full_phbtm"] = [fullPhoto];
+    }
+    ph.part1["phb_tm.incoming"] = incomingPhotos.slice(0, 3);
+  }
+
   fd.part1 = { ...fd.part1, phb_tm: phb };
 
   return { formData: fd, photos: ph };

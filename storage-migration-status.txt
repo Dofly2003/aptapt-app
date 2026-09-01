@@ -1,0 +1,117 @@
+STATUS MIGRASI FIREBASE STORAGE -> MINIO
+PT Adytia Putra Tehnik - dashboard
+Update: 30 Agustus 2026
+
+==============================================================
+SELESAI HARI INI
+==============================================================
+
+Arsitektur: server Express (server/) di VPS, terpisah dari Firebase
+Cloud Functions (project masih Spark plan, Functions v2 + panggilan
+keluar ke non-Google host butuh Blaze). Auth tetap verifikasi Firebase
+ID Token via firebase-admin. Presigned URL S3 (PUT/GET) ke MinIO.
+
+Prefix yang sudah dimigrasi (baca kode: sudah tidak pakai
+firebase/storage sama sekali, semua lewat server/ + secureStorage.js):
+
+1. inventori/     - privat, tulis: admin, baca: presigned (butuh login)
+2. pekerjaan/     - privat, tulis: admin, baca: presigned (butuh login)
+                    (kode jalan & teruji, tapi menurut user belum dipakai
+                    di praktik)
+3. nidi_data/     - privat, tulis: admin, baca: presigned, dukung PDF
+                    (sertifikat NIDI/SLO)
+4. instansi/      - PUBLIK-BACA (bucket policy MinIO, bukan presigned),
+                    tulis: editor (admin/superadmin/editor)
+5. pengujian/     - PUBLIK-BACA, tulis: owner (uid di path) ATAU admin
+                    -> INI YANG MEMPERBAIKI INSIDEN PRODUKSI AKTIF
+                    (Firebase Storage quota-exceeded, upload TTD client
+                    di PengujianAdminDetail gagal sebelum ini)
+
+Bug nyata yang ikut diperbaiki selagi migrasi pengujian/:
+- MobileFormPengujian.jsx: buildSafePhotos/mergePhotos dulu hardcode
+  cek `startsWith("https://firebasestorage")` untuk tahu foto sudah
+  ke-upload atau belum. Dengan URL MinIO, foto yang SUKSES ke-upload
+  akan selalu dianggap "masih pending" selamanya. Diganti jadi
+  isRemoteUploadedUrl() - cek "bukan URI lokal" (bukan whitelist 1
+  domain), jadi tidak akan rusak lagi kalau provider storage ganti lagi.
+- Batas ukuran file foto megger di PekerjaanRLO.jsx (20MB di frontend)
+  diselaraskan ke 5MB sesuai storage.rules asli (dulu upload 5-20MB
+  lolos validasi frontend tapi gagal di Firebase Storage Rules).
+
+==============================================================
+INFRA YANG SUDAH DI-SETUP (VPS)
+==============================================================
+
+- MinIO (sudah ada sebelumnya) - bucket `adytia-app`
+- Nginx reverse proxy 2 domain, keduanya HTTPS (Let's Encrypt/certbot):
+  - storage.pt-adytia.com -> 127.0.0.1:9000 (MinIO)
+  - api.pt-adytia.com     -> 127.0.0.1:8787 (server/ Express)
+- server/ dijalankan via pm2 (nama proses: aptapt-storage-api)
+  PERLU DICEK ULANG: apakah `pm2 startup` (command sudo yang
+  dikeluarkan pm2 supaya auto-start saat VPS reboot) sudah benar-benar
+  dijalankan? Sempat diminta tapi belum ada konfirmasi eksplisit.
+- Bucket policy public-read (mc anonymous set download) untuk 2 prefix:
+  instansi/ dan pengujian/
+- CORS: header `Access-Control-Allow-Origin: *` di vhost
+  storage.pt-adytia.com (dengan `proxy_hide_header` supaya tidak dobel
+  dengan header bawaan MinIO) - dibutuhkan untuk html2canvas (export
+  PDF) dan preflight request presigned PUT dari browser
+- Repo GitHub: https://github.com/Dofly2003/aptapt-app (private).
+  CATATAN: history lama sempat berisi 2 service account key yang
+  bocor (GitHub Push Protection yang menahannya) - history sudah
+  di-squash jadi 1 commit bersih SEBELUM kode ini pertama kali
+  berhasil push. Key yang bocor (project adytia-pt id ...c1d3e1bf74,
+  project webdashboardptapt id ...2eac9a1025) sudah dikonfirmasi
+  dihapus/dirotasi oleh user - TAPI belum diverifikasi ulang secara
+  independen, layak dicek sekali lagi di GCP Console kalau sempat.
+
+==============================================================
+BELUM DIKERJAKAN
+==============================================================
+
+Prefix yang masih 100% di Firebase Storage (belum disentuh sama sekali):
+- laporan/        - laporan teknisi
+- rekrutmen/      - CV pelamar (upload TANPA login - butuh desain auth
+                    berbeda, lihat catatan di bawah)
+- downloads/      - distribusi APK
+- lembaga_lit/    - logo/TTD/stempel LIT
+- temp_files/     - file sementara 24 jam, hanya superadmin
+- alatKerja/      - foto alat kerja
+- pdf_temp/, pdf_converted/ - dipakai fitur convertPdfToWord (Cloud
+                    Function functions/index.js) - migrasi ini butuh
+                    ubah Cloud Function juga, bukan cuma frontend
+
+Bug PRE-EXISTING yang ketahuan saat audit, TIDAK terkait migrasi ini,
+belum diperbaiki:
+- maintenanceGardu/ dan laikOperasi/ dipakai aktif di 4 halaman
+  (MobileMaintenanceGardu, MobileMaintenanceGarduList, LaikOperasiEditor,
+  LaikOperasiManagement) tapi prefix-nya TIDAK ADA sama sekali di
+  storage.rules asli -> kena default-deny -> upload di kedua fitur ini
+  kemungkinan besar SUDAH GAGAL dari sebelum sesi ini, tidak berkaitan
+  dengan migrasi MinIO.
+
+Catatan desain untuk rekrutmen/ (kalau nanti dikerjakan): endpoint
+upload sekarang (`getSecureUploadUrl` pola) mensyaratkan login (Firebase
+ID Token). Form lamaran kerja (FormLamaran.jsx) upload TANPA login sama
+sekali - butuh jalur terpisah yang tidak wajib auth, dengan validasi
+lebih ketat (rate-limit per-IP, ukuran file, content-type) untuk
+menggantikan proteksi yang tadinya dari Firebase Storage Rules.
+
+==============================================================
+DATA LAMA (FOTO/FILE) - BELUM DIMIGRASI
+==============================================================
+
+Untuk prefix yang KODE-nya sudah pindah ke MinIO (nidi_data/, instansi/,
+pengujian/), file-file LAMA yang sudah ter-upload SEBELUM migrasi ini
+MASIH ada di Firebase Storage, dan dokumen Firestore-nya MASIH simpan
+URL Firebase lama (https://firebasestorage.googleapis.com/...). Ini
+sengaja dibuat begitu (fallback), record lama tetap tampil normal
+selama Firebase Storage belum dihapus/kena masalah kuota lagi.
+
+inventori/ dan pekerjaan/ TIDAK punya data lama (sudah dicek awal
+migrasi, folder-nya kosong di Firebase Storage) - jadi 2 prefix itu
+sudah 100% lepas dari Firebase, tidak ada sisa.
+
+Lihat file terpisah untuk cara memindahkan data lama ini kalau mau
+benar-benar lepas dari Firebase Storage sepenuhnya (bukan cuma upload
+baru saja yang ke MinIO).

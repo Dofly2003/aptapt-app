@@ -289,8 +289,8 @@ function buildPage({ code, title, data, instansi, logoBuf, sig1Buf, sig2Buf, con
 // A.1 PHB TM
 function contentA1(form, photos, imgMap) {
   const rows = [
-    ["Spesifikasi",         gf(form,"part1.phb_tm.spesifikasi.spesifikasi")],
-    ["Tahun Pembuatan",     gf(form,"part1.phb_tm.spesifikasi.tahun")],
+    ["Spesifikasi",         gf(form,"part1.phb_tm.incoming.spesifikasi") || gf(form,"part1.phb_tm.spesifikasi.spesifikasi")],
+    ["Tahun Pembuatan",     gf(form,"part1.phb_tm.incoming.tahun")        || gf(form,"part1.phb_tm.spesifikasi.tahun")],
     ["Merk",                gf(form,"part1.phb_tm.incoming.merk")],
     ["Tipe",                gf(form,"part1.phb_tm.incoming.tipe")],
     ["Jenis Pemutus",       gf(form,"part1.phb_tm.incoming.jenisPemutus")],
@@ -299,7 +299,7 @@ function contentA1(form, photos, imgMap) {
   ];
   const items = [
     { label:"Foto Nameplate PHB TM", url: gp(photos,"part1","phb_tm.incoming")[1] },
-    { label:"Foto Full PHB TM",      url: gp(photos,"part1","phb_tm.spesifikasi")[0] },
+    { label:"Foto Full PHB TM",      url: gp(photos,"part1","phb_tm.foto_full_phbtm")[0] || gp(photos,"part1","phb_tm.incoming")[3] || gp(photos,"part1","phb_tm.spesifikasi")[0] },
   ];
   return [nameplateTable(rows), spacer(), photoGrid(items, imgMap)].filter(Boolean);
 }
@@ -307,14 +307,14 @@ function contentA1(form, photos, imgMap) {
 // A.2 Saluran TM
 function contentA2(form, photos, imgMap) {
   const rows = [
-    ["Merk",          gf(form,"part1.phb_tm.kabel_sktm.merk")],
-    ["Tipe / Jenis",  gf(form,"part1.phb_tm.kabel_sktm.tipe")],
-    ["Ukuran",        gf(form,"part1.phb_tm.kabel_sktm.ukuran")],
-    ["Panjang (m)",   gf(form,"part1.phb_tm.kabel_sktm.panjang")],
+    ["Merk",          gf(form,"part1.phb_tm.kabel_incoming.merk")        || gf(form,"part1.phb_tm.kabel_sktm.merk")],
+    ["Tipe / Jenis",  gf(form,"part1.phb_tm.kabel_incoming.tipe")        || gf(form,"part1.phb_tm.kabel_sktm.tipe")],
+    ["Ukuran",        gf(form,"part1.phb_tm.kabel_incoming.ukuran")      || gf(form,"part1.phb_tm.kabel_sktm.ukuran")],
+    ["Panjang (m)",   gf(form,"part1.phb_tm.kabel_incoming.panjang")     || gf(form,"part1.phb_tm.kabel_sktm.panjang")],
   ].filter(([, v]) => v && v !== "-");
   const items = [
-    { label:"Foto Nameplate Kabel TM", url: gp(photos,"part1","phb_tm.kabel_sktm")[0] },
-    { label:"Foto Jalur Kabel TM",     url: gp(photos,"part1","phb_tm.kabel_sktm")[1] },
+    { label:"Foto Nameplate Kabel TM", url: gp(photos,"part1","phb_tm.kabel_incoming")[0] || gp(photos,"part1","phb_tm.kabel_sktm")[0] },
+    { label:"Foto Jalur Kabel TM",     url: gp(photos,"part1","phb_tm.kabel_incoming")[1] || gp(photos,"part1","phb_tm.kabel_sktm")[1] },
   ];
   return [nameplateTable(rows), spacer(), photoGrid(items, imgMap)].filter(Boolean);
 }
@@ -389,8 +389,8 @@ function contentA6(form, photos, imgMap) {
 // B.1 Konstruksi
 function contentB1(form, photos, imgMap) {
   const items = [
-    { label:"PHB TM",     url: gp(photos,"part1","phb_tm.spesifikasi")[0] },
-    { label:"Saluran TM", url: gp(photos,"part1","phb_tm.kabel_sktm")[0] },
+    { label:"PHB TM",     url: gp(photos,"part1","phb_tm.foto_full_phbtm")[0] || gp(photos,"part1","phb_tm.incoming")[3] || gp(photos,"part1","phb_tm.spesifikasi")[0] },
+    { label:"Saluran TM", url: gp(photos,"part1","phb_tm.kabel_incoming")[0] || gp(photos,"part1","phb_tm.kabel_sktm")[0] },
     { label:"Trafo",      url: gp(photos,"part1","trafo.nameplate")[0] },
     { label:"Kabel TR",   url: gp(photos,"part1","phb_tr.kabel_tr")[0] },
     { label:"PHB TR",     url: gp(photos,"part1","phb_tr.phb_tr_full")[0] },

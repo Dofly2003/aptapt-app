@@ -1,4 +1,4 @@
-import { useContext } from "react";
+import React, { useContext } from "react";
 import { Menu, Smartphone } from "lucide-react";
 import { AuthContext } from "../context/AuthContext";
 import { auth } from "../firebase/config";
@@ -41,8 +41,8 @@ function Navbar({ openSidebar }) {
           <Menu size={22} />
         </button>
 
-        <h1 className="font-semibold">
-          Dashboard PT. Adytia
+        <h1 className="font-semibold text-sm sm:text-base truncate">
+          <span className="hidden sm:inline">Dashboard </span>PT. Adytia
         </h1>
 
       </div>
@@ -62,7 +62,7 @@ function Navbar({ openSidebar }) {
           </a>
         )}
 
-        <div className="text-right">
+        <div className="text-right hidden sm:block">
 
           <p className="text-sm font-semibold">
             {profile?.username || "Loading..."}
@@ -74,17 +74,24 @@ function Navbar({ openSidebar }) {
 
         </div>
 
-        <img
-          src={profile?.photoURL || "https://i.pravatar.cc/40"}
-          className="w-8 h-8 rounded-full"
-          alt="profile"
-        />
+        {profile?.photoURL ? (
+          <img
+            src={profile.photoURL}
+            className="w-8 h-8 rounded-full"
+            alt="profile"
+          />
+        ) : (
+          <div className="w-8 h-8 rounded-full bg-amber-500 flex items-center justify-center text-white text-sm font-bold">
+            {(profile?.displayName || profile?.email || "U").charAt(0).toUpperCase()}
+          </div>
+        )}
 
         <button
           onClick={handleLogout}
-          className="bg-red-500 text-white px-3 py-1 rounded text-sm hover:bg-red-600"
+          className="bg-red-500 text-white px-2 sm:px-3 py-1 rounded text-sm hover:bg-red-600"
         >
-          Logout
+          <span className="hidden sm:inline">Logout</span>
+          <span className="sm:hidden text-xs">Keluar</span>
         </button>
 
       </div>
@@ -95,4 +102,4 @@ function Navbar({ openSidebar }) {
 
 }
 
-export default Navbar;
+export default React.memo(Navbar);

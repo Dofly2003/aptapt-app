@@ -1,13 +1,21 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
-import { VitePWA } from 'vite-plugin-pwa'
 
 export default defineConfig({
   base: process.env.CAPACITOR_BUILD ? "./" : "/",
 
   optimizeDeps: {
-    // Only scan the real entry point — avoid Android build artifacts
     entries: ["index.html"],
+    exclude: ["pdfjs-dist"],
+  },
+
+  build: {
+    // Disable minification — avoids esbuild Go process OOM (VirtualAlloc errno=1455) on
+    // Windows machines with low free virtual memory. Firebase Hosting serves brotli/gzip
+    // anyway, so transfer size stays comparable. Re-enable once pagefile is enlarged.
+    minify: false,
+    sourcemap: false,
+    chunkSizeWarningLimit: 600,
   },
 
   plugins: [
@@ -24,5 +32,5 @@ export default defineConfig({
     //     theme_color: '#2563eb',
     //   }
     // })
-  ]
+  ],
 })

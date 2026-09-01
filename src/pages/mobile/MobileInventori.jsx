@@ -7,6 +7,7 @@ import {
   getAllGudang,     createGudang,     updateGudang,     removeGudang,
   formatRupiah,    uploadBarangPhoto, deleteBarangPhoto,
 } from "../../services/inventoriService";
+import { useSecurePhotoUrls } from "../../hooks/useSecurePhotoUrls";
 import {
   ArrowLeft, Plus, Pencil, Trash2, X, ArrowDownLeft, ArrowUpRight,
   Search, Camera, ImageIcon, Wrench, ShoppingBag, CheckCircle, AlertCircle,
@@ -283,6 +284,7 @@ export default function MobileInventori() {
     i.namaProduk?.toLowerCase().includes(search.toLowerCase()) ||
     i.kodeProduk?.toLowerCase().includes(search.toLowerCase())
   );
+  const photoUrls = useSecurePhotoUrls(stok.items.map(i => i.fotoPath));
   const totalNilaiStok = stok.items.reduce(
     (s, i) => s + (Number(i.stokAkhir) || 0) * (Number(i.hargaBeli) || 0), 0
   );
@@ -346,8 +348,8 @@ export default function MobileInventori() {
               <ItemCard key={item.id} onEdit={() => openStokEdit(item)} onDel={() => stok.setDel(item)}>
                 <div className="flex gap-3">
                   <div className="shrink-0">
-                    {item.fotoUrl ? (
-                      <img src={item.fotoUrl} alt={item.namaProduk}
+                    {(photoUrls[item.fotoPath] || item.fotoUrl) ? (
+                      <img src={photoUrls[item.fotoPath] || item.fotoUrl} alt={item.namaProduk}
                         className="w-14 h-14 rounded-xl object-cover border border-slate-200" />
                     ) : (
                       <div className="w-14 h-14 rounded-xl bg-slate-100 flex items-center justify-center">

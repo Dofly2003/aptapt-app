@@ -1,7 +1,9 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import {
   Plus, Edit2, Trash2, Check, X, ChevronLeft, ChevronRight, Calendar as CalIcon,
+  LayoutGrid, Table2, Search, Filter, FileText,
 } from "lucide-react";
+import LaporanProyekModal from "./LaporanProyekModal";
 import {
   AdminPageHeader, Button, Field, Input, TextArea, Select, EmptyState, useToast,
 } from "../../components/admin/AdminUI";
@@ -15,6 +17,7 @@ const EMPTY = {
   kodeProyek: "", namaProyek: "", klien: "", manajerProyek: "",
   tanggalMulai: "", tanggalSelesai: "", anggaran: "", realisasi: "",
   progress: "0", status: "perencanaan", prioritas: "normal", deskripsi: "",
+  noPO: "", namaPelanggan: "", alamatPelanggan: "", teleponPelanggan: "", emailPelanggan: "",
 };
 
 const PALETTE = [
@@ -44,7 +47,7 @@ const STATUS_COLORS = {
   dibatalkan: "bg-red-100 text-red-700",
 };
 
-const WIZARD_STEPS = ["Info Dasar", "Jadwal & Tim", "Keuangan"];
+const WIZARD_STEPS = ["Info Dasar", "Jadwal & Tim", "Keuangan", "Pelanggan"];
 
 // ─── Small helpers ─────────────────────────────────────────────────────────────
 
@@ -118,10 +121,14 @@ function ProyekWizard({ open, onClose, onSave, editing, form, set, show }) {
 
           {step === 1 && (
             <div className="space-y-4">
-              <Field label="Kode Proyek">
-                <Input value={form.kodeProyek} onChange={e => set("kodeProyek", e.target.value)} placeholder="PRJ-2026-001" />
-                <p className="text-xs text-gray-400 mt-1">Sudah di-generate otomatis, bisa diubah</p>
-              </Field>
+              <div className="grid grid-cols-2 gap-4">
+                <Field label="Kode Proyek">
+                  <Input value={form.kodeProyek} onChange={e => set("kodeProyek", e.target.value)} placeholder="PRJ-2026-001" />
+                </Field>
+                <Field label="No. PO">
+                  <Input value={form.noPO} onChange={e => set("noPO", e.target.value)} placeholder="PO-2026-001" />
+                </Field>
+              </div>
               <Field label="Nama Proyek *">
                 <Input value={form.namaProyek} onChange={e => set("namaProyek", e.target.value)}
                   placeholder="Contoh: Instalasi Panel Listrik Gedung A" autoFocus />
@@ -187,6 +194,30 @@ function ProyekWizard({ open, onClose, onSave, editing, form, set, show }) {
                   <ProgressBar value={form.progress} />
                 </div>
               </Field>
+            </div>
+          )}
+
+          {step === 4 && (
+            <div className="space-y-4">
+              <p className="text-xs text-gray-400 -mt-1">Informasi pelanggan untuk keperluan laporan pekerjaan.</p>
+              <Field label="Nama Pelanggan">
+                <Input value={form.namaPelanggan} onChange={e => set("namaPelanggan", e.target.value)}
+                  placeholder="Nama lengkap atau perusahaan" autoFocus />
+              </Field>
+              <Field label="Alamat">
+                <TextArea value={form.alamatPelanggan} onChange={e => set("alamatPelanggan", e.target.value)}
+                  placeholder="Alamat lengkap pelanggan" rows={2} />
+              </Field>
+              <div className="grid grid-cols-2 gap-4">
+                <Field label="Telepon">
+                  <Input value={form.teleponPelanggan} onChange={e => set("teleponPelanggan", e.target.value)}
+                    placeholder="+62..." />
+                </Field>
+                <Field label="Email">
+                  <Input type="email" value={form.emailPelanggan} onChange={e => set("emailPelanggan", e.target.value)}
+                    placeholder="email@domain.com" />
+                </Field>
+              </div>
             </div>
           )}
 
@@ -355,7 +386,7 @@ function CalendarView({ coloredItems, onEdit }) {
 
 // ─── Active Projects List ──────────────────────────────────────────────────────
 
-function ActiveProyekList({ coloredItems, onEdit, onDelete }) {
+function ActiveProyekList({ coloredItems, onEdit, onDelete, onLaporan }) {
   const [showOther, setShowOther] = useState(false);
   const active = coloredItems.filter(p => p.status === "perencanaan" || p.status === "berjalan");
   const other  = coloredItems.filter(p => p.status === "ditangguhkan" || p.status === "selesai" || p.status === "dibatalkan");
@@ -368,7 +399,7 @@ function ActiveProyekList({ coloredItems, onEdit, onDelete }) {
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {active.map(p => renderCard(p, onEdit, onDelete))}
+          {active.map(p => renderCard(p, onEdit, onDelete, onLaporan))}
         </div>
       )}
 
@@ -383,7 +414,7 @@ function ActiveProyekList({ coloredItems, onEdit, onDelete }) {
           </button>
           {showOther && (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {other.map(p => renderCard(p, onEdit, onDelete))}
+              {other.map(p => renderCard(p, onEdit, onDelete, onLaporan))}
             </div>
           )}
         </div>
@@ -392,7 +423,7 @@ function ActiveProyekList({ coloredItems, onEdit, onDelete }) {
   );
 }
 
-function renderCard(p, onEdit, onDelete) {
+function renderCard(p, onEdit, onDelete, onLaporan) {
   return (
     <div key={p.id} className="bg-white rounded-xl border hover:shadow-md transition-shadow flex flex-col">
       {/* Color stripe */}
@@ -404,6 +435,9 @@ function renderCard(p, onEdit, onDelete) {
             <p className="text-xs text-gray-400 font-mono mt-0.5">{p.kodeProyek || "—"}</p>
           </div>
           <div className="flex gap-1 ml-2 shrink-0">
+            <button onClick={() => onLaporan(p)} className="text-amber-500 hover:text-amber-700 p-1" title="Buat Laporan">
+              <FileText className="w-3.5 h-3.5" />
+            </button>
             <button onClick={() => onEdit(p)} className="text-blue-500 hover:text-blue-700 p-1">
               <Edit2 className="w-3.5 h-3.5" />
             </button>
@@ -440,15 +474,220 @@ function renderCard(p, onEdit, onDelete) {
   );
 }
 
+// ─── Table View ───────────────────────────────────────────────────────────────
+
+const PRIORITAS_COLORS = {
+  rendah: "bg-slate-100 text-slate-600",
+  normal: "bg-blue-100 text-blue-700",
+  tinggi: "bg-red-100 text-red-600",
+};
+const PRIORITAS_LABEL = { rendah: "Rendah", normal: "Normal", tinggi: "Tinggi" };
+
+function SortIcon({ active, dir }) {
+  return (
+    <span className="inline-flex flex-col ml-1 opacity-50 group-hover:opacity-100 transition-opacity">
+      <span className={`text-[8px] leading-none ${active && dir === "asc"  ? "opacity-100 text-amber-500" : ""}`}>▲</span>
+      <span className={`text-[8px] leading-none ${active && dir === "desc" ? "opacity-100 text-amber-500" : ""}`}>▼</span>
+    </span>
+  );
+}
+
+function TableView({ items, onEdit, onDelete, onLaporan }) {
+  const [search, setSearch]             = useState("");
+  const [filterStatus, setFilterStatus] = useState("semua");
+  const [sortKey, setSortKey]           = useState("namaProyek");
+  const [sortDir, setSortDir]           = useState("asc");
+
+  function toggleSort(key) {
+    if (sortKey === key) setSortDir(d => d === "asc" ? "desc" : "asc");
+    else { setSortKey(key); setSortDir("asc"); }
+  }
+
+  const PRIORITAS_ORDER = { tinggi: 0, normal: 1, rendah: 2 };
+  const STATUS_ORDER    = { berjalan: 0, perencanaan: 1, ditangguhkan: 2, selesai: 3, dibatalkan: 4 };
+
+  const filtered = useMemo(() => {
+    let list = items;
+    if (filterStatus !== "semua") list = list.filter(p => p.status === filterStatus);
+    if (search.trim()) {
+      const q = search.toLowerCase();
+      list = list.filter(p =>
+        (p.namaProyek    || "").toLowerCase().includes(q) ||
+        (p.kodeProyek    || "").toLowerCase().includes(q) ||
+        (p.klien         || "").toLowerCase().includes(q) ||
+        (p.manajerProyek || "").toLowerCase().includes(q)
+      );
+    }
+
+    list = [...list].sort((a, b) => {
+      let va, vb;
+      switch (sortKey) {
+        case "kodeProyek":    va = a.kodeProyek    || ""; vb = b.kodeProyek    || ""; break;
+        case "namaProyek":    va = a.namaProyek    || ""; vb = b.namaProyek    || ""; break;
+        case "klien":         va = a.klien         || ""; vb = b.klien         || ""; break;
+        case "manajerProyek": va = a.manajerProyek || ""; vb = b.manajerProyek || ""; break;
+        case "tanggalMulai":  va = a.tanggalMulai  || ""; vb = b.tanggalMulai  || ""; break;
+        case "tanggalSelesai":va = a.tanggalSelesai|| ""; vb = b.tanggalSelesai|| ""; break;
+        case "status":        va = STATUS_ORDER[a.status]    ?? 9; vb = STATUS_ORDER[b.status]    ?? 9; return sortDir === "asc" ? va - vb : vb - va;
+        case "prioritas":     va = PRIORITAS_ORDER[a.prioritas] ?? 9; vb = PRIORITAS_ORDER[b.prioritas] ?? 9; return sortDir === "asc" ? va - vb : vb - va;
+        case "progress":      va = Number(a.progress) || 0; vb = Number(b.progress) || 0; return sortDir === "asc" ? va - vb : vb - va;
+        case "anggaran":      va = Number(a.anggaran)  || 0; vb = Number(b.anggaran)  || 0; return sortDir === "asc" ? va - vb : vb - va;
+        case "realisasi":     va = Number(a.realisasi) || 0; vb = Number(b.realisasi) || 0; return sortDir === "asc" ? va - vb : vb - va;
+        default:              va = ""; vb = "";
+      }
+      const cmp = String(va).localeCompare(String(vb), "id", { numeric: true });
+      return sortDir === "asc" ? cmp : -cmp;
+    });
+
+    return list;
+  }, [items, search, filterStatus, sortKey, sortDir]);
+
+  function Th({ label, colKey, className = "", align = "left" }) {
+    const active = sortKey === colKey;
+    return (
+      <th
+        onClick={() => toggleSort(colKey)}
+        className={`group px-4 py-3 text-xs font-semibold text-slate-500 cursor-pointer select-none whitespace-nowrap hover:bg-slate-100 transition-colors text-${align} ${className}`}
+      >
+        {label}<SortIcon active={active} dir={sortDir} />
+      </th>
+    );
+  }
+
+  return (
+    <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+      {/* Toolbar */}
+      <div className="px-4 py-3 border-b border-slate-100 flex flex-wrap items-center gap-3">
+        <div className="relative flex-1 min-w-[180px]">
+          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+          <input
+            className="w-full pl-8 pr-3 h-9 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-400/40"
+            placeholder="Cari nama, kode, klien, PJ..."
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+          />
+        </div>
+        <div className="flex items-center gap-2">
+          <Filter size={13} className="text-slate-400" />
+          <select
+            value={filterStatus}
+            onChange={e => setFilterStatus(e.target.value)}
+            className="h-9 px-2 text-sm border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-amber-400/40"
+          >
+            <option value="semua">Semua Status</option>
+            <option value="perencanaan">Perencanaan</option>
+            <option value="berjalan">Berjalan</option>
+            <option value="ditangguhkan">Ditangguhkan</option>
+            <option value="selesai">Selesai</option>
+            <option value="dibatalkan">Dibatalkan</option>
+          </select>
+        </div>
+        <span className="text-xs text-slate-400 shrink-0">{filtered.length} proyek</span>
+      </div>
+
+      {/* Table */}
+      {filtered.length === 0 ? (
+        <div className="py-16 text-center text-slate-400 text-sm">Tidak ada data</div>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="bg-slate-50 border-b border-slate-200">
+              <tr>
+                <Th label="Kode"       colKey="kodeProyek"     className="whitespace-nowrap" />
+                <Th label="Nama Proyek" colKey="namaProyek" />
+                <Th label="Klien"      colKey="klien"          className="hidden md:table-cell" />
+                <Th label="Manajer"    colKey="manajerProyek"  className="hidden lg:table-cell" />
+                <Th label="Tgl Mulai"  colKey="tanggalMulai"   className="hidden lg:table-cell" />
+                <Th label="Tgl Selesai" colKey="tanggalSelesai" className="hidden lg:table-cell" />
+                <Th label="Status"     colKey="status" />
+                <Th label="Prioritas"  colKey="prioritas"      className="hidden sm:table-cell" />
+                <Th label="Progress"   colKey="progress"       className="w-36 hidden xl:table-cell" />
+                <Th label="Anggaran"   colKey="anggaran"       className="hidden xl:table-cell" align="right" />
+                <Th label="Realisasi"  colKey="realisasi"      className="hidden xl:table-cell" align="right" />
+                <th className="px-4 py-3 text-xs font-semibold text-slate-500 text-right">Aksi</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {filtered.map((p, i) => {
+                const pct = Math.min(100, Math.max(0, Number(p.progress) || 0));
+                const c   = PALETTE[i % PALETTE.length];
+                return (
+                  <tr key={p.id} className="hover:bg-slate-50/70 transition-colors">
+                    <td className="px-4 py-3 text-xs font-mono text-slate-500 whitespace-nowrap">{p.kodeProyek || "—"}</td>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-2">
+                        <div className={`w-2 h-2 rounded-full shrink-0 ${c.dot}`} />
+                        <span className="font-semibold text-slate-800 leading-tight">{p.namaProyek}</span>
+                      </div>
+                      {p.deskripsi && (
+                        <p className="text-xs text-slate-400 mt-0.5 pl-4 truncate max-w-[220px]">{p.deskripsi}</p>
+                      )}
+                    </td>
+                    <td className="px-4 py-3 text-slate-600 hidden md:table-cell">{p.klien || <span className="text-slate-300">—</span>}</td>
+                    <td className="px-4 py-3 text-slate-600 hidden lg:table-cell">{p.manajerProyek || <span className="text-slate-300">—</span>}</td>
+                    <td className="px-4 py-3 text-xs text-slate-500 hidden lg:table-cell whitespace-nowrap">{p.tanggalMulai  ? fmt(p.tanggalMulai)  : <span className="text-slate-300">—</span>}</td>
+                    <td className="px-4 py-3 text-xs text-slate-500 hidden lg:table-cell whitespace-nowrap">{p.tanggalSelesai ? fmt(p.tanggalSelesai) : <span className="text-slate-300">—</span>}</td>
+                    <td className="px-4 py-3">
+                      <span className={`px-2 py-0.5 rounded-full text-xs font-semibold whitespace-nowrap ${STATUS_COLORS[p.status] || "bg-gray-100 text-gray-600"}`}>
+                        {STATUS_LABEL[p.status] || p.status}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 hidden sm:table-cell">
+                      <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${PRIORITAS_COLORS[p.prioritas] || "bg-slate-100 text-slate-600"}`}>
+                        {PRIORITAS_LABEL[p.prioritas] || p.prioritas || "—"}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 hidden xl:table-cell">
+                      <div className="flex items-center gap-2">
+                        <div className="flex-1 bg-slate-100 rounded-full h-1.5">
+                          <div className={`${c.dot} h-1.5 rounded-full`} style={{ width: `${pct}%` }} />
+                        </div>
+                        <span className="text-xs text-slate-500 w-7 text-right shrink-0">{pct}%</span>
+                      </div>
+                    </td>
+                    <td className="px-4 py-3 text-right text-xs text-slate-600 hidden xl:table-cell whitespace-nowrap">
+                      {Number(p.anggaran) > 0 ? formatRupiah(p.anggaran) : <span className="text-slate-300">—</span>}
+                    </td>
+                    <td className="px-4 py-3 text-right text-xs hidden xl:table-cell whitespace-nowrap">
+                      {Number(p.realisasi) > 0
+                        ? <span className="text-emerald-600 font-medium">{formatRupiah(p.realisasi)}</span>
+                        : <span className="text-slate-300">—</span>}
+                    </td>
+                    <td className="px-4 py-3 text-right">
+                      <div className="flex items-center justify-end gap-1">
+                        <button onClick={() => onLaporan(p)} className="p-1.5 rounded-lg hover:bg-amber-50 text-amber-500 hover:text-amber-700 transition" title="Buat Laporan">
+                          <FileText size={13} />
+                        </button>
+                        <button onClick={() => onEdit(p)} className="p-1.5 rounded-lg hover:bg-blue-50 text-blue-500 hover:text-blue-700 transition">
+                          <Edit2 size={13} />
+                        </button>
+                        <button onClick={() => onDelete(p)} className="p-1.5 rounded-lg hover:bg-red-50 text-red-400 hover:text-red-600 transition">
+                          <Trash2 size={13} />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Main Page ─────────────────────────────────────────────────────────────────
 
 export default function DaftarProyek() {
-  const [items, setItems] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [items, setItems]           = useState([]);
+  const [loading, setLoading]       = useState(true);
   const [wizardOpen, setWizardOpen] = useState(false);
-  const [editing, setEditing] = useState(null);
-  const [form, setForm] = useState(EMPTY);
-  const { show, Toast } = useToast();
+  const [editing, setEditing]       = useState(null);
+  const [form, setForm]             = useState(EMPTY);
+  const [view, setView]             = useState("grid"); // "grid" | "table"
+  const [laporanProyek, setLaporanProyek] = useState(null);
+  const { show, Toast }             = useToast();
 
   const load = async () => {
     setLoading(true);
@@ -510,9 +749,26 @@ export default function DaftarProyek() {
         title="Daftar Proyek"
         description="Kelola proyek, anggaran, dan progres pelaksanaan."
         actions={
-          <Button onClick={openAdd}>
-            <Plus className="w-4 h-4" /> Tambah Proyek
-          </Button>
+          <div className="flex items-center gap-2">
+            {/* View toggle */}
+            <div className="flex border border-slate-200 rounded-lg overflow-hidden">
+              <button
+                onClick={() => setView("grid")}
+                className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium transition ${view === "grid" ? "bg-amber-500 text-white" : "bg-white text-slate-500 hover:bg-slate-50"}`}
+              >
+                <LayoutGrid size={13} /> Grid
+              </button>
+              <button
+                onClick={() => setView("table")}
+                className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium transition ${view === "table" ? "bg-amber-500 text-white" : "bg-white text-slate-500 hover:bg-slate-50"}`}
+              >
+                <Table2 size={13} /> Tabel
+              </button>
+            </div>
+            <Button onClick={openAdd}>
+              <Plus className="w-4 h-4" /> Tambah Proyek
+            </Button>
+          </div>
         }
       />
 
@@ -540,6 +796,8 @@ export default function DaftarProyek() {
         <div className="p-8 text-center text-gray-400">Memuat...</div>
       ) : items.length === 0 ? (
         <EmptyState message="Belum ada data proyek. Klik 'Tambah Proyek' untuk mulai." />
+      ) : view === "table" ? (
+        <TableView items={allColored} onEdit={openEdit} onDelete={handleDelete} onLaporan={setLaporanProyek} />
       ) : (
         <>
           {/* Calendar */}
@@ -554,7 +812,7 @@ export default function DaftarProyek() {
               </span>
             )}
           </div>
-          <ActiveProyekList coloredItems={allColored} onEdit={openEdit} onDelete={handleDelete} />
+          <ActiveProyekList coloredItems={allColored} onEdit={openEdit} onDelete={handleDelete} onLaporan={setLaporanProyek} />
         </>
       )}
 
@@ -566,6 +824,12 @@ export default function DaftarProyek() {
         form={form}
         set={set}
         show={show}
+      />
+
+      <LaporanProyekModal
+        proyek={laporanProyek}
+        open={!!laporanProyek}
+        onClose={() => setLaporanProyek(null)}
       />
     </div>
   );

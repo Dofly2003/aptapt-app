@@ -1,4 +1,4 @@
-import { formatRupiahPlain, formatTanggalLengkap, hitungTotal, terbilang } from "../../services/rabService";
+import { formatRupiahPlain, formatTanggalLengkap, hitungTotal, hitungSubtotalGroup, hitungTotalFromDoc, terbilang } from "../../services/rabService";
 
 // A4 at 96 dpi
 const A4_W = 794;
@@ -17,62 +17,103 @@ const C = {
   green:  "#15803D",
 };
 
-// ── Estimate-based page splits (no DOM measurement required) ───────────────
-function estimatePageSplits(allItems, ppnAktif, hasFooter, hasBillTo, marginPx, fontScale) {
-  const s         = fontScale;
-  const headerH   = Math.round(106 * s);
-  const footerH   = hasFooter ? Math.round(46 * s) : 0;
-  // Invoice top: INVOICE title row + bill-to block + perihal line
-  const topH      = Math.round((hasBillTo ? 175 : 90) * s);
-  const theadH    = Math.round(42 * s);
-  const rowH      = Math.round(42 * s);
-  const summaryH  = Math.round((ppnAktif ? 136 : 102) * s);
-  // Invoice closing: paymentBox + catatan + closingMessage + signatureBlock
-  const closingH  = Math.round(280 * s);
-  const tailH     = summaryH + closingH + 8;
+// ── Build flat row array from groups ──────────────────────────────────────────
+// type:'header'   → group title row
+// type:'item'     → item row (localIdx resets per group)
+// type:'subtotal' → group subtotal row
+function buildFlatRows(groups, showSectionHeaders) {
+  const rows = [];
+  for (let gi = 0; gi < groups.length; gi++) {
+    const grp = groups[gi];
+    if (showSectionHeaders) {
+      rows.push({ type: "header", nama: grp.nama, grpIdx: gi });
+    }
+    for (let li = 0; li < (grp.items || []).length; li++) {
+      rows.push({ type: "item", item: grp.items[li], localIdx: li, grpIdx: gi });
+    }
+    if (showSectionHeaders) {
+      rows.push({
+        type: "subtotal",
+        nama: grp.nama,
+        subtotal: hitungSubtotalGroup(grp.items),
+        grpIdx: gi,
+      });
+    }
+  }
+  return rows;
+}
+
+// ── Estimate-based page splits (no DOM measurement required) ──────────────────
+function estimatePageSplits(flatRows, ppnAktif, hasFooter, hasBillTo, marginPx, fontScale, tampilTtd) {
+  const s          = fontScale;
+  const headerH    = Math.round(106 * s);
+  const footerH    = hasFooter ? Math.round(46 * s) : 0;
+  const topH       = Math.round((hasBillTo ? 175 : 90) * s);
+  const theadH     = Math.round(42 * s);
+  const rowHItem   = Math.round(42 * s);
+  const rowHHeader = Math.round(36 * s);
+  const rowHSub    = Math.round(36 * s);
+  const summaryH   = Math.round((ppnAktif ? 136 : 102) * s);
+  const closingH   = Math.round((tampilTtd !== false ? 280 : 140) * s);
+  const tailH      = summaryH + closingH + 8;
 
   const innerH     = A4_H - 2 * marginPx;
   const page1Avail = innerH - headerH - footerH - topH - theadH;
   const pageNAvail = innerH - headerH - footerH - theadH;
 
-  if (allItems.length === 0) return [{ start: 0, end: 0 }];
+  if (flatRows.length === 0) return [{ start: 0, end: 0 }];
+
+  const rowH = (row) => {
+    if (row.type === "header")   return rowHHeader;
+    if (row.type === "subtotal") return rowHSub;
+    return rowHItem;
+  };
 
   const splits = [];
   let pageStart = 0, isFirstPage = true, used = 0;
 
-  for (let i = 0; i < allItems.length; i++) {
-    const isLast = i === allItems.length - 1;
+  for (let i = 0; i < flatRows.length; i++) {
+    const isLast = i === flatRows.length - 1;
     const avail  = isFirstPage ? page1Avail : pageNAvail;
+    const h      = rowH(flatRows[i]);
 
     if (isLast) {
-      if (i > pageStart && used + rowH + tailH > avail) {
+      if (i > pageStart && used + h + tailH > avail) {
         splits.push({ start: pageStart, end: i });
         pageStart = i; isFirstPage = false; used = 0;
       }
-    } else if (i > pageStart && used + rowH > avail - tailH) {
+    } else if (i > pageStart && used + h > avail - tailH) {
       splits.push({ start: pageStart, end: i });
       pageStart = i; isFirstPage = false; used = 0;
     }
-    used += rowH;
+    used += h;
   }
-  splits.push({ start: pageStart, end: allItems.length });
+  splits.push({ start: pageStart, end: flatRows.length });
   return splits;
 }
 
-// ── Root component ─────────────────────────────────────────────────────────
+// ── Root component ─────────────────────────────────────────────────────────────
 export default function TemplateInvoiceAdytia({ data, instansi, pageMargin, fontScale = 1 }) {
   if (!data) return null;
 
   const marginPx  = Math.round((pageMargin ?? 10) * MM_TO_PX);
   const fs        = (pt) => `${pt * fontScale}pt`;
-  const allItems  = data.items || [];
-  const totals    = hitungTotal(allItems, data.ppnAktif !== false, 11);
   const ppnAktif  = data.ppnAktif !== false;
+  const tampilTtd = data.tampilTtd !== false;
   const lokasi    = data.lokasi || deriveKota(instansi?.alamat) || "Gresik";
   const hasFooter = !!(instansi?.alamat || instansi?.telp || instansi?.web);
   const hasBillTo = !!(data.tagihan?.nama || data.tagihan?.perusahaan || data.tagihan?.alamat);
 
-  const pageSplits = estimatePageSplits(allItems, ppnAktif, hasFooter, hasBillTo, marginPx, fontScale);
+  // Support both groups format and legacy flat items
+  const useGroups = Boolean(data.groups?.length);
+  const groups = useGroups
+    ? data.groups
+    : [{ id: "legacy", nama: "", items: data.items || [] }];
+  const showSectionHeaders = useGroups && groups.length > 1;
+
+  const flatRows  = buildFlatRows(groups, showSectionHeaders);
+  const totals    = hitungTotalFromDoc(data);
+  const pageSplits = estimatePageSplits(flatRows, ppnAktif, hasFooter, hasBillTo, marginPx, fontScale, tampilTtd);
 
   const FONT_BASE = {
     fontFamily: "'Plus Jakarta Sans', 'Inter', system-ui, sans-serif",
@@ -101,6 +142,9 @@ export default function TemplateInvoiceAdytia({ data, instansi, pageMargin, font
     flexDirection: "column",
   };
 
+  // Running zebra counter (only item rows count)
+  let zebraCounter = 0;
+
   return (
     <div className="laporan-form" style={{ display: "flex", flexDirection: "column", gap: 16 }}>
       <style>{`
@@ -117,9 +161,9 @@ export default function TemplateInvoiceAdytia({ data, instansi, pageMargin, font
       `}</style>
 
       {pageSplits.map((split, pageIdx) => {
-        const isFirst   = pageIdx === 0;
-        const isLast    = pageIdx === pageSplits.length - 1;
-        const pageItems = allItems.slice(split.start, split.end);
+        const isFirst    = pageIdx === 0;
+        const isLast     = pageIdx === pageSplits.length - 1;
+        const pageRows   = flatRows.slice(split.start, split.end);
 
         return (
           <div key={pageIdx} className="laporan-page-sheet" style={PAGE_SHELL}>
@@ -160,13 +204,61 @@ export default function TemplateInvoiceAdytia({ data, instansi, pageMargin, font
                   </tr>
                 </thead>
                 <tbody>
-                  {pageItems.map((it, i) => {
-                    const globalIdx = split.start + i;
-                    const jml = (Number(it.volume) || 0) * (Number(it.hargaSatuan) || 0);
+                  {pageRows.map((row, ri) => {
+                    if (row.type === "header") {
+                      return (
+                        <tr key={`hdr-${row.grpIdx}-${ri}`}>
+                          <td colSpan={6} style={{
+                            ...TD,
+                            background: "#1B3464",
+                            color: "#fff",
+                            fontWeight: 700,
+                            fontSize: fs(10),
+                            letterSpacing: "0.3px",
+                            padding: "7px 12px",
+                          }}>
+                            {row.nama}
+                          </td>
+                        </tr>
+                      );
+                    }
+
+                    if (row.type === "subtotal") {
+                      return (
+                        <tr key={`sub-${row.grpIdx}-${ri}`} style={{ background: "#EEF4FF" }}>
+                          <td colSpan={5} style={{
+                            ...TD,
+                            textAlign: "right",
+                            fontWeight: 700,
+                            fontSize: fs(10),
+                            color: C.navy,
+                          }}>
+                            SUBTOTAL {row.nama}
+                          </td>
+                          <td style={{
+                            ...TD,
+                            textAlign: "right",
+                            fontWeight: 700,
+                            fontFamily: "monospace",
+                            color: C.navy,
+                            fontSize: fs(10),
+                          }}>
+                            {formatRupiahPlain(row.subtotal)}
+                          </td>
+                        </tr>
+                      );
+                    }
+
+                    // type === 'item'
+                    const it        = row.item;
+                    const rowNum    = showSectionHeaders ? row.localIdx + 1 : (split.start + ri + 1 - pageRows.slice(0, ri).filter(r => r.type !== "item").length);
+                    const jml       = (Number(it.volume) || 0) * (Number(it.hargaSatuan) || 0);
+                    const isEven    = zebraCounter % 2 === 0;
+                    zebraCounter++;
                     return (
-                      <tr key={it.id || globalIdx}
-                        className={`inv-tr ${globalIdx % 2 === 0 ? "inv-tr-odd" : "inv-tr-even"}`}>
-                        <td style={{ ...TD, textAlign: "center" }}>{globalIdx + 1}</td>
+                      <tr key={it.id || `item-${row.grpIdx}-${row.localIdx}`}
+                        className={`inv-tr ${isEven ? "inv-tr-odd" : "inv-tr-even"}`}>
+                        <td style={{ ...TD, textAlign: "center" }}>{rowNum}</td>
                         <td style={TD}>{it.nama}</td>
                         <td style={{ ...TD, textAlign: "center" }}>{it.satuan}</td>
                         <td style={{ ...TD, textAlign: "center" }}>{it.volume}</td>
@@ -199,7 +291,7 @@ export default function TemplateInvoiceAdytia({ data, instansi, pageMargin, font
                   {data.closingMessage && (
                     <p style={{ margin: "20px 0 16px", textAlign: "justify", lineHeight: 1.7 }}>{data.closingMessage}</p>
                   )}
-                  <SignatureBlock ttd={data.ttd} instansi={instansi} fs={fs} />
+                  {tampilTtd && <SignatureBlock ttd={data.ttd} instansi={instansi} fs={fs} />}
                 </>
               )}
             </div>
@@ -213,7 +305,7 @@ export default function TemplateInvoiceAdytia({ data, instansi, pageMargin, font
   );
 }
 
-// ── InvoiceTitleRow ────────────────────────────────────────────────────────
+// ── InvoiceTitleRow ────────────────────────────────────────────────────────────
 function InvoiceTitleRow({ data, lokasi, fs }) {
   return (
     <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 16 }}>
@@ -254,7 +346,7 @@ function InvoiceTitleRow({ data, lokasi, fs }) {
   );
 }
 
-// ── SummaryRows ────────────────────────────────────────────────────────────
+// ── SummaryRows ────────────────────────────────────────────────────────────────
 function SummaryRows({ totals, ppnAktif, TD, fs }) {
   return (
     <>
@@ -289,7 +381,7 @@ function SummaryRows({ totals, ppnAktif, TD, fs }) {
   );
 }
 
-// ── DocHeader ──────────────────────────────────────────────────────────────
+// ── DocHeader ──────────────────────────────────────────────────────────────────
 function DocHeader({ instansi, fs }) {
   return (
     <div className="inv-doc-header" style={{ marginBottom: 8, flexShrink: 0 }}>
@@ -346,7 +438,7 @@ function ContactBadge({ icon, value, fs }) {
   );
 }
 
-// ── BillToBlock ────────────────────────────────────────────────────────────
+// ── BillToBlock ────────────────────────────────────────────────────────────────
 function BillToBlock({ tagihan, fs }) {
   const t = tagihan || {};
   if (!t.nama && !t.perusahaan && !t.alamat) return null;
@@ -368,7 +460,7 @@ function BillToBlock({ tagihan, fs }) {
   );
 }
 
-// ── PaymentBox ─────────────────────────────────────────────────────────────
+// ── PaymentBox ─────────────────────────────────────────────────────────────────
 function PaymentBox({ pembayaran, fs }) {
   return (
     <div style={{ border: `2px solid ${C.gold}`, borderRadius: 6, padding: "12px 16px", marginTop: 16, background: "#FFFDE7" }}>
@@ -399,7 +491,7 @@ function PaymentBox({ pembayaran, fs }) {
   );
 }
 
-// ── GoldBox ────────────────────────────────────────────────────────────────
+// ── GoldBox ────────────────────────────────────────────────────────────────────
 function GoldBox({ children, fs }) {
   return (
     <div style={{ padding: "8px 12px", borderLeft: `4px solid ${C.gold}`, background: "#FFFDE7", borderRadius: "0 4px 4px 0", fontSize: fs(9), lineHeight: 1.6 }}>
@@ -408,7 +500,7 @@ function GoldBox({ children, fs }) {
   );
 }
 
-// ── SignatureBlock ─────────────────────────────────────────────────────────
+// ── SignatureBlock ─────────────────────────────────────────────────────────────
 function SignatureBlock({ ttd, instansi, fs }) {
   const hasSig   = Boolean(ttd?.signature?.url);
   const hasStamp = Boolean(ttd?.stempel?.url);
@@ -430,7 +522,7 @@ function SignatureBlock({ ttd, instansi, fs }) {
   );
 }
 
-// ── FooterBar ──────────────────────────────────────────────────────────────
+// ── FooterBar ──────────────────────────────────────────────────────────────────
 function FooterBar({ instansi, fs }) {
   if (!instansi?.alamat && !instansi?.telp && !instansi?.web) return null;
   return (

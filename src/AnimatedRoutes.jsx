@@ -1,143 +1,165 @@
+import { lazy, Suspense } from "react";
 import { Routes, Route, useLocation } from "react-router-dom";
-import { AnimatePresence } from "framer-motion";
 
-/* ===== IMPORT PAGE ===== */
-import Login from "./pages/auth/Login";
-import LoginPhone from "./pages/auth/LoginPhone";
+/* ===== PAGE IMPORTS (lazy-loaded) ===== */
+const Login = lazy(() => import("./pages/auth/Login"));
+const LoginPhone = lazy(() => import("./pages/auth/LoginPhone"));
 
-import PublicHome from "./pages/page-umum/PublicHome";
-import About from "./pages/page-umum/About";
-import Contact from "./pages/page-umum/Contact";
-import PesananSaya from "./pages/page-umum/PesananSaya";
-import NidiDataEntryUmum from "./pages/page-umum/DataEntryUmum";
-import FormLamaran from "./pages/page-umum/FormLamaran";
+const PublicHome = lazy(() => import("./pages/page-umum/PublicHome"));
+const About = lazy(() => import("./pages/page-umum/About"));
+const Contact = lazy(() => import("./pages/page-umum/Contact"));
+const PesananSaya = lazy(() => import("./pages/page-umum/PesananSaya"));
+const NidiDataEntryUmum = lazy(() => import("./pages/page-umum/DataEntryUmum"));
+const FormLamaran = lazy(() => import("./pages/page-umum/FormLamaran"));
 
-import Panel1 from "./pages/page-panel/panel1";
-import NotFound from "./pages/NotFound";
+const Panel1 = lazy(() => import("./pages/page-panel/panel1"));
+const NotFound = lazy(() => import("./pages/NotFound"));
 
 /* DASHBOARD */
 import ProtectedRoute from "./components/ProtectedRoute";
 import DashboardLayout from "./layouts/DashboardLayout";
 
-import Dashboard from "./pages/admin/Dashboard";
-import NidiDataEntry from "./pages/admin/DataEntry";
-import NidiData from "./pages/admin/DataList";
-import NidiAkun from "./pages/admin/DataAkun";
-import Users from "./pages/admin/Users";
+const Dashboard = lazy(() => import("./pages/admin/Dashboard"));
+const NidiDataEntry = lazy(() => import("./pages/admin/DataEntry"));
+const NidiData = lazy(() => import("./pages/admin/DataList"));
+const NidiAkun = lazy(() => import("./pages/admin/DataAkun"));
+const Users = lazy(() => import("./pages/admin/Users"));
 
 /* ===== LANDING CMS ===== */
-import SlidesManagement from "./pages/admin/SlidesManagement";
-import ServicesManagement from "./pages/admin/ServicesManagement";
-import ProjectsManagement from "./pages/admin/ProjectsManagement";
-import TestimonialsManagement from "./pages/admin/TestimonialsManagement";
-import SettingsPanel from "./pages/admin/SettingsPanel";
-import InstansiManagement from "./pages/admin/InstansiManagement";
-import LaporanPreview from "./pages/admin/LaporanPreview";
-import EdukasiManagement from "./pages/admin/EdukasiManagement";
-import PaymentSettings from "./pages/admin/PaymentSettings";
-import CompanySettings from "./pages/admin/CompanySettings";
-import RabManagement from "./pages/admin/RabManagement";
-import RabEditor from "./pages/admin/RabEditor";
-import RabPreview from "./pages/admin/RabPreview";
-import InvoiceManagement from "./pages/admin/InvoiceManagement";
-import InvoiceEditor from "./pages/admin/InvoiceEditor";
-import InvoicePreview from "./pages/admin/InvoicePreview";
-import PengujianManagement from "./pages/admin/PengujianManagement";
-import PengujianAdminDetail from "./pages/admin/PengujianAdminDetail";
-import GuestAccountManagement from "./pages/admin/GuestAccountManagement";
-import GuestApprovals from "./pages/admin/GuestApprovals";
+const SlidesManagement = lazy(() => import("./pages/admin/SlidesManagement"));
+const ServicesManagement = lazy(() => import("./pages/admin/ServicesManagement"));
+const ProjectsManagement = lazy(() => import("./pages/admin/ProjectsManagement"));
+const TestimonialsManagement = lazy(() => import("./pages/admin/TestimonialsManagement"));
+const SettingsPanel = lazy(() => import("./pages/admin/SettingsPanel"));
+const InstansiManagement = lazy(() => import("./pages/admin/InstansiManagement"));
+const LaporanPreview = lazy(() => import("./pages/admin/LaporanPreview"));
+const EdukasiManagement = lazy(() => import("./pages/admin/EdukasiManagement"));
+const PaymentSettings = lazy(() => import("./pages/admin/PaymentSettings"));
+const CompanySettings = lazy(() => import("./pages/admin/CompanySettings"));
+const RabManagement = lazy(() => import("./pages/admin/RabManagement"));
+const RabEditor = lazy(() => import("./pages/admin/RabEditor"));
+const RabPreview = lazy(() => import("./pages/admin/RabPreview"));
+const LaikOperasiManagement = lazy(() => import("./pages/admin/LaikOperasiManagement"));
+const LaikOperasiEditor = lazy(() => import("./pages/admin/LaikOperasiEditor"));
+const MasterHarga = lazy(() => import("./pages/admin/MasterHarga"));
+const InvoiceManagement = lazy(() => import("./pages/admin/InvoiceManagement"));
+const InvoiceEditor = lazy(() => import("./pages/admin/InvoiceEditor"));
+const InvoicePreview = lazy(() => import("./pages/admin/InvoicePreview"));
+const PengujianManagement = lazy(() => import("./pages/admin/PengujianManagement"));
+const PengujianAdminDetail = lazy(() => import("./pages/admin/PengujianAdminDetail"));
+const GuestAccountManagement = lazy(() => import("./pages/admin/GuestAccountManagement"));
+const GuestApprovals = lazy(() => import("./pages/admin/GuestApprovals"));
 
 /* ===== KEUANGAN ===== */
-import KwitansiManagement from "./pages/admin/KwitansiManagement";
-import KwitansiBuilder from "./pages/admin/KwitansiBuilder";
-import LedgerUmum from "./pages/keuangan/LedgerUmum";
-import AkunDibayar from "./pages/keuangan/AkunDibayar";
-import AkunDiterima from "./pages/keuangan/AkunDiterima";
-import Anggaran from "./pages/keuangan/Anggaran";
-import ArusKas from "./pages/keuangan/ArusKas";
+const KwitansiManagement = lazy(() => import("./pages/admin/KwitansiManagement"));
+const KwitansiBuilder = lazy(() => import("./pages/admin/KwitansiBuilder"));
+const LedgerUmum = lazy(() => import("./pages/keuangan/LedgerUmum"));
+const AkunDibayar = lazy(() => import("./pages/keuangan/AkunDibayar"));
+const AkunDiterima = lazy(() => import("./pages/keuangan/AkunDiterima"));
+const Anggaran = lazy(() => import("./pages/keuangan/Anggaran"));
+const ArusKas = lazy(() => import("./pages/keuangan/ArusKas"));
 
 /* ===== SDM ===== */
-import DataKaryawan from "./pages/sdm/DataKaryawan";
-import Penggajian from "./pages/sdm/Penggajian";
-import Absensi from "./pages/sdm/Absensi";
-import Rekrutmen from "./pages/sdm/Rekrutmen";
-import Kinerja from "./pages/sdm/Kinerja";
-import SertifikatMagang from "./pages/sdm/SertifikatMagang";
+const DataKaryawan = lazy(() => import("./pages/sdm/DataKaryawan"));
+const Penggajian = lazy(() => import("./pages/sdm/Penggajian"));
+const Absensi = lazy(() => import("./pages/sdm/Absensi"));
+const Rekrutmen = lazy(() => import("./pages/sdm/Rekrutmen"));
+const Kinerja = lazy(() => import("./pages/sdm/Kinerja"));
+const SertifikatMagang = lazy(() => import("./pages/sdm/SertifikatMagang"));
 
 /* ===== PENGADAAN ===== */
-import PurchaseOrder from "./pages/pengadaan/PurchaseOrder";
-import DataVendor from "./pages/pengadaan/DataVendor";
-import ApprovalPembelian from "./pages/pengadaan/ApprovalPembelian";
-import PenerimaanBarang from "./pages/pengadaan/PenerimaanBarang";
+const PurchaseOrder = lazy(() => import("./pages/pengadaan/PurchaseOrder"));
+const DataVendor = lazy(() => import("./pages/pengadaan/DataVendor"));
+const ApprovalPembelian = lazy(() => import("./pages/pengadaan/ApprovalPembelian"));
+const PenerimaanBarang = lazy(() => import("./pages/pengadaan/PenerimaanBarang"));
 
 /* ===== INVENTORI ===== */
-import StokBarang from "./pages/inventori/StokBarang";
-import PergerakanStok from "./pages/inventori/PergerakanStok";
-import Gudang from "./pages/inventori/Gudang";
+const StokBarang = lazy(() => import("./pages/inventori/StokBarang"));
+const PergerakanStok = lazy(() => import("./pages/inventori/PergerakanStok"));
+const Gudang = lazy(() => import("./pages/inventori/Gudang"));
 
 /* ===== PRODUKSI ===== */
-import BillOfMaterial from "./pages/produksi/BillOfMaterial";
-import WorkOrderProduksi from "./pages/produksi/WorkOrderProduksi";
-import PenjadwalanProduksi from "./pages/produksi/PenjadwalanProduksi";
-import InspeksiKualitas from "./pages/produksi/InspeksiKualitas";
+const BillOfMaterial = lazy(() => import("./pages/produksi/BillOfMaterial"));
+const WorkOrderProduksi = lazy(() => import("./pages/produksi/WorkOrderProduksi"));
+const PenjadwalanProduksi = lazy(() => import("./pages/produksi/PenjadwalanProduksi"));
+const InspeksiKualitas = lazy(() => import("./pages/produksi/InspeksiKualitas"));
 
 /* ===== PENJUALAN ===== */
-import DataPelanggan from "./pages/penjualan/DataPelanggan";
-import SalesOrder from "./pages/penjualan/SalesOrder";
-import Invoice from "./pages/penjualan/Invoice";
-import Pipeline from "./pages/penjualan/Pipeline";
+const DataPelanggan = lazy(() => import("./pages/penjualan/DataPelanggan"));
+const SalesOrder = lazy(() => import("./pages/penjualan/SalesOrder"));
+const Invoice = lazy(() => import("./pages/penjualan/Invoice"));
+const Pipeline = lazy(() => import("./pages/penjualan/Pipeline"));
 
 /* ===== PROYEK ===== */
-import DaftarProyek from "./pages/proyek/DaftarProyek";
-import SumberDaya from "./pages/proyek/SumberDaya";
-import TugasProyek from "./pages/proyek/TugasProyek";
-import JadwalProyek from "./pages/proyek/JadwalProyek";
+const DaftarProyek = lazy(() => import("./pages/proyek/DaftarProyek"));
+const SumberDaya = lazy(() => import("./pages/proyek/SumberDaya"));
+const TugasProyek = lazy(() => import("./pages/proyek/TugasProyek"));
+const JadwalProyek = lazy(() => import("./pages/proyek/JadwalProyek"));
 
 /* ===== ASET ===== */
-import DaftarAset from "./pages/aset/DaftarAset";
-import JadwalMaintenance from "./pages/aset/JadwalMaintenance";
-import WorkOrderAset from "./pages/aset/WorkOrderAset";
-import AlatKerja from "./pages/aset/AlatKerja";
+const DaftarAset = lazy(() => import("./pages/aset/DaftarAset"));
+const JadwalMaintenance = lazy(() => import("./pages/aset/JadwalMaintenance"));
+const WorkOrderAset = lazy(() => import("./pages/aset/WorkOrderAset"));
+const AlatKerja = lazy(() => import("./pages/aset/AlatKerja"));
+
+/* ===== ANALYTICS ===== */
+const AnalyticsDashboard = lazy(() => import("./pages/admin/AnalyticsDashboard"));
+
+/* ===== MONITORING ===== */
+const MonitoringDevices = lazy(() => import("./pages/monitoring/MonitoringDevices"));
 
 /* ===== WORK ORDER NIDI ===== */
-import WoPenyelesaian from "./pages/admin/WoPenyelesaian";
+const WoPenyelesaian = lazy(() => import("./pages/admin/WoPenyelesaian"));
 
 /* ===== RLO / SKLO ===== */
-import LembagaLIT from "./pages/admin/LembagaLIT";
-import PekerjaanRLO from "./pages/admin/PekerjaanRLO";
+const LembagaLIT = lazy(() => import("./pages/admin/LembagaLIT"));
+const PekerjaanRLO = lazy(() => import("./pages/admin/PekerjaanRLO"));
 
 /* ===== DOKUMEN EDITOR ===== */
-import DokumenEditor from "./pages/dokumen/DokumenEditor";
-import PdfToWord from "./pages/dokumen/PdfToWord";
+const DokumenEditor = lazy(() => import("./pages/dokumen/DokumenEditor"));
+const PdfToWord = lazy(() => import("./pages/dokumen/PdfToWord"));
+const CompressPdf = lazy(() => import("./pages/dokumen/CompressPdf"));
 
 /* MOBILE */
 import MobileLayout from "./layouts/MobileLayout";
-import MobileHome from "./pages/mobile/MobileHome";
-import MobileProfile from "./pages/mobile/MobileProfile";
-import MobileLaporanForm from "./pages/mobile/MobileLaporan";
-import MobileNotes from "./pages/mobile/MobileNotes";
-import MobileNoteDetail from "./pages/mobile/MobileNoteDetail";
-import MobileTransaksiGlobal from "./pages/mobile/MobileTransaksiGlobal";
-import MobileFormPengujian from "./pages/mobile/MobileFormPengujian";
-import MobilePengujianList from "./pages/mobile/MobilePengujianList";
-import MobileReportGenerate from "./pages/mobile/MobileReportGenerate";
-import MobileUserManagement from "./pages/mobile/MobileUserManagement";
-import MobileModul     from "./pages/mobile/MobileModul";
-import MobileKeuangan  from "./pages/mobile/MobileKeuangan";
-import MobileInventori from "./pages/mobile/MobileInventori";
-import MobileRab          from "./pages/mobile/MobileRab";
-import MobileRabEditor    from "./pages/mobile/MobileRabEditor";
-import MobileInvoice      from "./pages/mobile/MobileInvoice";
-import MobileInvoiceEditor from "./pages/mobile/MobileInvoiceEditor";
-import MobileFileShare from "./pages/mobile/MobileFileShare";
-import MobileAlatKerja from "./pages/mobile/MobileAlatKerja";
+const MobileHome = lazy(() => import("./pages/mobile/MobileHome"));
+const MobileProfile = lazy(() => import("./pages/mobile/MobileProfile"));
+const MobileLaporanForm = lazy(() => import("./pages/mobile/MobileLaporan"));
+const MobileNotes = lazy(() => import("./pages/mobile/MobileNotes"));
+const MobileNoteDetail = lazy(() => import("./pages/mobile/MobileNoteDetail"));
+const MobileTransaksiGlobal = lazy(() => import("./pages/mobile/MobileTransaksiGlobal"));
+const MobileFormPengujian = lazy(() => import("./pages/mobile/MobileFormPengujian"));
+const MobilePengujianList = lazy(() => import("./pages/mobile/MobilePengujianList"));
+const MobileReportGenerate = lazy(() => import("./pages/mobile/MobileReportGenerate"));
+const MobileUserManagement = lazy(() => import("./pages/mobile/MobileUserManagement"));
+const MobileModul = lazy(() => import("./pages/mobile/MobileModul"));
+const MobileKeuangan = lazy(() => import("./pages/mobile/MobileKeuangan"));
+const MobileInventori = lazy(() => import("./pages/mobile/MobileInventori"));
+const MobileRab = lazy(() => import("./pages/mobile/MobileRab"));
+const MobileRabEditor = lazy(() => import("./pages/mobile/MobileRabEditor"));
+const MobileInvoice = lazy(() => import("./pages/mobile/MobileInvoice"));
+const MobileInvoiceEditor = lazy(() => import("./pages/mobile/MobileInvoiceEditor"));
+const MobileFileShare = lazy(() => import("./pages/mobile/MobileFileShare"));
+const MobileAlatKerja = lazy(() => import("./pages/mobile/MobileAlatKerja"));
+const MobileAkomodasi = lazy(() => import("./pages/mobile/MobileAkomodasi"));
+const MobileMaintenanceGarduList = lazy(() => import("./pages/mobile/MobileMaintenanceGarduList"));
+const MobileMaintenanceGardu = lazy(() => import("./pages/mobile/MobileMaintenanceGardu"));
+
+/* ===== KASBON ===== */
+const AkomKasbon = lazy(() => import("./pages/admin/AkomKasbon"));
+
+const PageSpinner = () => (
+  <div className="flex items-center justify-center h-screen bg-slate-950">
+    <div className="w-8 h-8 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" />
+  </div>
+);
 
 export default function AnimatedRoutes() {
   const location = useLocation();
 
   return (
-    <AnimatePresence mode="wait">
-      <Routes location={location} key={location.pathname}>
+    <Suspense fallback={<PageSpinner />}>
+      <Routes location={location}>
 
         {/* ===== PUBLIC ===== */}
         <Route path="/" element={<PublicHome />} />
@@ -185,6 +207,10 @@ export default function AnimatedRoutes() {
           <Route path="rab" element={<RabManagement />} />
           <Route path="rab/baru" element={<RabEditor />} />
           <Route path="rab/:id" element={<RabEditor />} />
+          <Route path="laik-operasi" element={<LaikOperasiManagement />} />
+          <Route path="laik-operasi/baru" element={<LaikOperasiEditor />} />
+          <Route path="laik-operasi/:id" element={<LaikOperasiEditor />} />
+          <Route path="master-harga" element={<MasterHarga />} />
           <Route path="invoice" element={<InvoiceManagement />} />
           <Route path="invoice/baru" element={<InvoiceEditor />} />
           <Route path="invoice/:id" element={<InvoiceEditor />} />
@@ -197,6 +223,10 @@ export default function AnimatedRoutes() {
           <Route path="guest-accounts" element={<GuestAccountManagement />} />
           <Route path="guest-approvals" element={<GuestApprovals />} />
 
+          {/* ===== ANALYTICS ===== */}
+          <Route path="analytics" element={<AnalyticsDashboard />} />
+          <Route path="monitoring" element={<MonitoringDevices />} />
+
           {/* ===== KEUANGAN ===== */}
           <Route path="keuangan/kwitansi" element={<KwitansiManagement />} />
           <Route path="keuangan/kwitansi/baru" element={<KwitansiBuilder />} />
@@ -206,6 +236,7 @@ export default function AnimatedRoutes() {
           <Route path="keuangan/piutang" element={<AkunDiterima />} />
           <Route path="keuangan/anggaran" element={<Anggaran />} />
           <Route path="keuangan/arus-kas" element={<ArusKas />} />
+          <Route path="kasbon" element={<AkomKasbon />} />
 
           {/* ===== SDM ===== */}
           <Route path="sdm/karyawan" element={<DataKaryawan />} />
@@ -262,8 +293,9 @@ export default function AnimatedRoutes() {
         </Route>
 
         {/* ===== DOKUMEN TOOLS ===== */}
-        <Route path="/dashboard/dokumen/editor"    element={<ProtectedRoute><DokumenEditor /></ProtectedRoute>} />
-        <Route path="/dashboard/dokumen/pdf-to-word" element={<ProtectedRoute><PdfToWord /></ProtectedRoute>} />
+        <Route path="/dashboard/dokumen/editor"       element={<ProtectedRoute><DokumenEditor /></ProtectedRoute>} />
+        <Route path="/dashboard/dokumen/pdf-to-word"  element={<ProtectedRoute><PdfToWord /></ProtectedRoute>} />
+        <Route path="/dashboard/dokumen/compress-pdf" element={<ProtectedRoute><CompressPdf /></ProtectedRoute>} />
 
         {/* ===== MOBILE ===== */}
         <Route
@@ -295,9 +327,13 @@ export default function AnimatedRoutes() {
           <Route path="invoice/:id"  element={<MobileInvoiceEditor />} />
           <Route path="file-share"   element={<MobileFileShare />} />
           <Route path="alat-kerja"   element={<MobileAlatKerja />} />
+          <Route path="kasbon"       element={<MobileAkomodasi />} />
+          <Route path="maintenance-gardu"       element={<MobileMaintenanceGarduList />} />
+          <Route path="maintenance-gardu/baru"  element={<MobileMaintenanceGardu />} />
+          <Route path="maintenance-gardu/:id"   element={<MobileMaintenanceGardu />} />
         </Route>
 
       </Routes>
-    </AnimatePresence>
+    </Suspense>
   );
 }

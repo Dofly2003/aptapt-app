@@ -1,0 +1,184 @@
+PETA ARSITEKTUR ADYTIA SAAT INI
+Infrastructure Brief - PT Adytia Putra Tehnik
+Dibuat: 30 Agustus 2026
+Project Firebase: adytia-pt
+Domain aktif: pt-adytia.com, adytia-pt.web.app
+
+Disusun dari pembacaan langsung firebase.json, package.json,
+functions/index.js, ptadytiapt/index.js, .firebaserc, dan
+src/firebase/config.js pada repo saat ini - bukan asumsi.
+
+==============================================================
+1. ISI FIREBASE HOSTING SEKARANG
+==============================================================
+
+- Tipe aplikasi   : SPA - React 19 + Vite 7 (bukan SSR/fullstack framework)
+- Yang dideploy   : hasil "npm run build" -> folder dist/, di-serve
+                    sebagai static file. Semua route di-rewrite ke
+                    index.html (client-side routing via react-router-dom v7)
+- PWA/service worker: aktif, via vite-plugin-pwa (public/sw.js) - cache
+                    offline juga tersedia untuk pengguna web biasa,
+                    terpisah dari sync engine Dexie milik build Android
+- Dua varian build: build web biasa vs build khusus Capacitor
+                    (flag CAPACITOR_BUILD=1) untuk paket APK Android -
+                    source code sama, output berbeda
+
+Artinya: ini kandidat paling mudah dipindah ke subdomain app. - tinggal
+serve folder dist/ yang sama dari static host manapun (Nginx di VPS,
+atau tetap di Firebase Hosting). Tidak butuh Node runtime saat serve,
+hanya saat build.
+
+==============================================================
+2. BACKEND YANG ADA
+==============================================================
+
+- Platform  : Cloud Functions v2 - bukan Cloud Run custom, bukan
+              Express server terpisah yang di-hosting sendiri
+- Codebase  : 2 codebase terpisah di firebase.json:
+              "functions" (default) dan "ptadytiapt"
+
+Codebase "functions" - 4 fungsi:
+  - getSecureDownloadUrl : signed URL Storage 30 detik, validasi
+    path + rate limit
+  - encryptData / decryptData : AES-256-GCM, key di Secret Manager,
+    admin-only
+  - convertPdfToWord : proxy ke API eksternal CloudConvert (PDF->DOCX)
+
+Codebase "ptadytiapt" - 1 fungsi:
+  - cleanupTempFiles : cron tiap 1 jam, hapus dokumen & file expired
+
+Artinya: semua 5 fungsi dipanggil lewat protokol callable Firebase SDK
+(httpsCallable), bukan REST endpoint biasa. Tidak ada api.pt-adytia.com
+yang aktif sekarang secara literal - kalau mau backend REST asli di
+VPS, kelima fungsi ini perlu ditulis ulang jadi endpoint Express biasa,
+bukan sekadar dipindah filenya.
+
+Catatan: dependency express, cors, multer, @google-cloud/vision ada
+di package.json root tapi tidak dipakai di kode Functions manapun -
+sisa dependency, bukan backend aktif.
+
+==============================================================
+3. DATABASE & AUTH
+==============================================================
+
+- Database : Firestore (utama, dengan persistent local cache SDK)
+             + Realtime Database (dipakai terbatas, lihat db2 di config)
+- Auth     : Firebase Auth - popup Google login di web, native flow
+             di Android via @capacitor-firebase/authentication
+- Storage  : Firebase Storage - bucket adytia-pt.firebasestorage.app,
+             dipakai untuk foto pengujian & dokumen
+- Rencana migrasi di kode: TIDAK ADA - tidak ditemukan indikasi
+             apapun menuju Postgres/MySQL/self-host auth di source
+             saat ini
+
+Artinya: arsitektur offline-first mobile (Dexie sync engine),
+Firestore Security Rules, dan Storage Rules semuanya menempel erat
+ke UID Firebase Auth. Melepas Firebase Auth/Firestore adalah proyek
+migrasi besar sendiri - terpisah dari keputusan subdomain app/api.
+Untuk fase subdomain pertama, realistis untuk tetap pakai
+Firestore/Auth/Storage dari Firebase apa pun host frontend-nya.
+
+==============================================================
+4. DOMAIN & STRUKTUR SAAT INI
+==============================================================
+
+- Root domain     : pt-adytia.com - sudah terpasang sebagai custom
+                     domain langsung ke Firebase Hosting (bukan
+                     redirect ke subdomain lain)
+- Domain bawaan    : adytia-pt.web.app / adytia-pt.firebaseapp.com
+- Isi root saat ini: satu SPA yang sama melayani semuanya - landing
+                     publik, dashboard admin (/dashboard/*), dan web
+                     mobile teknisi (/app-mobile/*). Tidak ada
+                     pemisahan app terpisah hari ini
+- Ketergantungan CSP: header CSP mengizinkan
+                     frame-src https://adytia-pt.firebaseapp.com
+                     secara eksplisit - wajib tetap ada di domain
+                     manapun, kalau tidak Google login popup gagal
+
+Artinya: "pemisahan" app./api. belum ada - ini murni rencana ke
+depan, bukan hal yang sedang diperbaiki. Root domain sudah dipakai
+untuk hosting langsung, jadi memindahkan root ke redirect/
+landing-only nanti berarti mengubah rewrite yang sudah live.
+
+==============================================================
+5. TRAFFIC & RESOURCE BUILD
+==============================================================
+
+- Data traffic aktual: BELUM DIKETAHUI - tidak ada sumber ini di
+             kode. Cek Firebase Console -> Hosting usage / Google
+             Analytics sebelum menentukan ukuran VPS
+- Build step : berat di sisi build time - bundle memuat tesseract.js
+             (OCR, WASM besar), pdfjs-dist, @react-pdf/renderer,
+             chart.js/recharts, dnd-kit, tiptap, Google Maps. Build
+             sudah butuh heap 8GB (--max-old-space-size=8192) di
+             package.json
+- Runtime saat serve: ringan - setelah build selesai, output hanya
+             static file. Serve tidak butuh Node sama sekali (cukup
+             Nginx), kecuali kelima Cloud Functions ikut dipindah ke
+             VPS sebagai proses Node terpisah
+
+Artinya: VPS 75 GiB kemungkinan lebih dari cukup untuk static
+hosting SPA + landing - beban nyata ada di build time (butuh RAM
+besar sesaat), bukan di serve time. Kalau build dilakukan di VPS itu
+sendiri (bukan CI/lokal lalu upload dist/), pastikan VPS punya RAM
+>= 8GB saat proses build berjalan, walau disk 75GB sendiri tidak
+jadi masalah.
+
+==============================================================
+REKOMENDASI STRUKTUR DOMAIN
+==============================================================
+
+Dua opsi realistis, bisa dijalankan bertahap - opsi A dulu untuk
+validasi, opsi B kalau memang mau lepas dari Firebase Hosting/Functions.
+
+--- OPSI A - tetap di Firebase, cuma menata subdomain ---
+
+  pt-adytia.com            -> Landing publik (Firebase Hosting)
+  app.pt-adytia.com        -> Dashboard + mobile web (Hosting target/
+                               site kedua, dist yang sama atau di-split)
+  api.pt-adytia.com        -> Rewrite Hosting -> Cloud Functions
+                               (butuh fungsi HTTP biasa, bukan callable)
+
+Risiko rendah, tidak perlu VPS, tidak perlu menulis ulang backend -
+hanya perlu multi-site Hosting (firebase.google.com/docs/hosting/
+multisites) + custom domain baru per site.
+
+--- OPSI B - target akhir di VPS ---
+
+  pt-adytia.com            -> Nginx serve static landing
+  app.pt-adytia.com        -> Nginx serve dist/ SPA (build tetap
+                               dari CI/lokal)
+  api.pt-adytia.com        -> Node/Express + firebase-admin, 5
+                               fungsi ditulis ulang jadi REST,
+                               reverse-proxy via Nginx
+
+Firestore/Auth/Storage tetap di Firebase pada opsi ini (dipanggil
+dari Express via firebase-admin) - melepas Firestore sepenuhnya ke
+Postgres adalah keputusan terpisah dan jauh lebih besar, tidak
+disarankan digabung dalam migrasi domain yang sama.
+
+--- LANGKAH BERTAHAP ---
+
+1. Ukur traffic nyata
+   - Cek Firebase Hosting usage & Analytics 30 hari terakhir
+   - Butuh VPS: tidak
+
+2. Pisah Hosting site
+   - Tambah Hosting target "app" di firebase.json, pasang custom
+     domain app.pt-adytia.com
+   - Butuh VPS: tidak
+
+3. Uji api. lewat rewrite
+   - Tambah 1 fungsi HTTP (bukan callable) + Hosting rewrite ke
+     api.pt-adytia.com sebagai percobaan kecil
+   - Butuh VPS: tidak
+
+4. Siapkan VPS
+   - Nginx + Node 24, deploy dist/ statis dulu (landing/app),
+     belum backend
+   - Butuh VPS: ya
+
+5. Pindah backend
+   - Tulis ulang 5 Cloud Functions jadi REST Express, pindahkan
+     DNS api. ke VPS terakhir
+   - Butuh VPS: ya

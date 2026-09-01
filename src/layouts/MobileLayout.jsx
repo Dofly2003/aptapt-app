@@ -1,12 +1,13 @@
 import { useContext, useEffect } from "react";
 import { AuthContext } from "../context/AuthContext";
 import { Outlet, useNavigate, useLocation } from "react-router-dom";
-import { Home, ClipboardList, UserCircle } from "lucide-react";
+import { Home, ClipboardList, UserCircle, Wallet } from "lucide-react";
 
 const NAV = [
-  { label: "Home",  path: "/app-mobile",               exact: true,  Icon: Home         },
-  { label: "Tugas", path: "/app-mobile/form-pengujian", exact: false, Icon: ClipboardList },
-  { label: "Akun",  path: "/app-mobile/profile",        exact: false, Icon: UserCircle   },
+  { label: "Home",   path: "/app-mobile",               exact: true,  Icon: Home         },
+  { label: "Tugas",  path: "/app-mobile/form-pengujian", exact: false, Icon: ClipboardList },
+  { label: "Kasbon", path: "/app-mobile/kasbon",         exact: false, Icon: Wallet       },
+  { label: "Akun",   path: "/app-mobile/profile",        exact: false, Icon: UserCircle   },
 ];
 
 function MobileLayout() {

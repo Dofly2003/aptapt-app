@@ -1,6 +1,7 @@
-import { useEffect, useState } from "react";
-import { collection, onSnapshot, query, orderBy, deleteDoc, doc } from "firebase/firestore";
+import { useEffect, useState, useRef, useMemo } from "react";
+import { collection, onSnapshot, query, orderBy, limit, deleteDoc, doc } from "firebase/firestore";
 import { db } from "../../firebase/config";
+import { logSearch } from "../../services/analyticsService";
 import { useNavigate } from "react-router-dom";
 import { Eye, Pencil, Trash2, Search, FileText } from "lucide-react";
 import { PermissionGate } from "../../components/PermissionGate";
@@ -17,16 +18,17 @@ export default function PengujianManagement() {
   const [statusFilter, setStatusFilter] = useState("all");
   const [confirmDelete, setConfirmDelete] = useState(null);
   const navigate = useNavigate();
+  const searchTimer = useRef(null);
 
   useEffect(() => {
-    const q = query(collection(db, "pengujian"), orderBy("createdAt", "desc"));
+    const q = query(collection(db, "pengujian"), orderBy("createdAt", "desc"), limit(200));
     return onSnapshot(q, snap => {
       setList(snap.docs.map(d => ({ id: d.id, ...d.data() })));
       setLoading(false);
     });
   }, []);
 
-  const filtered = list.filter(item => {
+  const filtered = useMemo(() => list.filter(item => {
     const q = search.toLowerCase();
     const matchSearch =
       (item.nama   || "").toLowerCase().includes(q) ||
@@ -34,7 +36,7 @@ export default function PengujianManagement() {
       (item.idpel  || "").toLowerCase().includes(q);
     const matchStatus = statusFilter === "all" || (item.status || "draft") === statusFilter;
     return matchSearch && matchStatus;
-  });
+  }), [list, search, statusFilter]);
 
   const handleDelete = async () => {
     if (!confirmDelete) return;
@@ -48,11 +50,11 @@ export default function PengujianManagement() {
     return d.toLocaleDateString("id-ID", { day: "2-digit", month: "short", year: "numeric" });
   };
 
-  const counts = {
+  const counts = useMemo(() => ({
     total: list.length,
     draft: list.filter(d => (d.status || "draft") === "draft").length,
     done:  list.filter(d => d.status === "done").length,
-  };
+  }), [list]);
 
   if (loading) return <div className="p-10 text-center text-slate-400">Memuat data...</div>;
 
@@ -82,31 +84,39 @@ export default function PengujianManagement() {
       </div>
 
       {/* Filter bar */}
-      <div className="flex flex-wrap gap-2">
-        <div className="relative">
+      <div className="flex flex-col sm:flex-row gap-2">
+        <div className="relative flex-1">
           <Search className="absolute left-3 top-2.5 w-4 h-4 text-slate-400" />
           <input
             type="text"
             placeholder="Cari nama / alamat / idpel..."
             value={search}
-            onChange={e => setSearch(e.target.value)}
-            className="pl-9 pr-3 py-2 text-sm border border-slate-200 rounded-lg w-72
+            onChange={e => {
+              setSearch(e.target.value);
+              clearTimeout(searchTimer.current);
+              if (e.target.value.trim()) {
+                searchTimer.current = setTimeout(() => logSearch(e.target.value, "pengujian"), 800);
+              }
+            }}
+            className="pl-9 pr-3 py-2 text-sm border border-slate-200 rounded-lg w-full
               focus:outline-none focus:ring-2 focus:ring-blue-400"
           />
         </div>
-        <select
-          value={statusFilter}
-          onChange={e => setStatusFilter(e.target.value)}
-          className="text-sm border border-slate-200 rounded-lg px-3 py-2
-            focus:outline-none focus:ring-2 focus:ring-blue-400 bg-white"
-        >
-          <option value="all">Semua Status</option>
-          <option value="draft">Draft</option>
-          <option value="done">Selesai</option>
-        </select>
-        <span className="ml-auto text-xs text-slate-400 self-center">
-          {filtered.length} dari {list.length} dokumen
-        </span>
+        <div className="flex items-center gap-2">
+          <select
+            value={statusFilter}
+            onChange={e => setStatusFilter(e.target.value)}
+            className="text-sm border border-slate-200 rounded-lg px-3 py-2
+              focus:outline-none focus:ring-2 focus:ring-blue-400 bg-white flex-1 sm:flex-none"
+          >
+            <option value="all">Semua Status</option>
+            <option value="draft">Draft</option>
+            <option value="done">Selesai</option>
+          </select>
+          <span className="text-xs text-slate-400 whitespace-nowrap">
+            {filtered.length} dari {list.length}
+          </span>
+        </div>
       </div>
 
       {/* Table */}

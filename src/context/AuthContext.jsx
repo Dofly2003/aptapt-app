@@ -1,4 +1,4 @@
-import { createContext, useEffect, useState } from "react";
+import { createContext, useEffect, useMemo, useState } from "react";
 import { auth, db } from "../firebase/config";
 import { onAuthStateChanged, signOut } from "firebase/auth";
 import { doc, getDoc } from "firebase/firestore";
@@ -93,18 +93,20 @@ export function AuthProvider({ children }) {
     return () => unsubscribe();
   }, []);
 
+  const contextValue = useMemo(() => ({
+    user,
+    role,
+    profile,
+    loading,
+    isReady,
+    needsSetup,
+    authError,
+    guestPermissions,
+    guestExpired,
+  }), [user, role, profile, loading, isReady, needsSetup, authError, guestPermissions, guestExpired]);
+
   return (
-    <AuthContext.Provider value={{
-      user,
-      role,
-      profile,
-      loading,
-      isReady,
-      needsSetup,
-      authError,
-      guestPermissions,
-      guestExpired,
-    }}>
+    <AuthContext.Provider value={contextValue}>
       {children}
     </AuthContext.Provider>
   );

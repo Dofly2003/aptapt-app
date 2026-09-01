@@ -1,5 +1,55 @@
 # PT Adytia Putra Tehnik — Project Context
 
+## WAJIB BACA SEBELUM APAPUN
+
+**Setiap kali memulai sesi baru, baca file ini (`CLAUDE.md`) terlebih dahulu sebelum menulis kode atau melakukan deploy.**
+
+---
+
+## Pre-Deploy Checklist — HARUS dijalankan sebelum setiap deploy
+
+Jangan deploy sebelum semua poin ini dicek. Ini adalah pelajaran dari insiden produksi nyata.
+
+### 1. Baca firebase.json dan verifikasi CSP
+Buka `firebase.json` dan periksa nilai `Content-Security-Policy`. Pastikan:
+
+| Direktif | Nilai wajib ada | Alasan |
+|----------|----------------|--------|
+| `worker-src` | `'self' blob:` | `blob:` saja memblokir SW dari domain sendiri |
+| `frame-src` | `https://adytia-pt.firebaseapp.com https://accounts.google.com` | Firebase Auth popup/iframe butuh ini — tanpanya Google login gagal |
+| `img-src` | TIDAK boleh ada URL eksternal yang tidak di-allowlist | Setiap domain gambar eksternal harus masuk daftar |
+| `connect-src` | Semua domain API yang dipakai sudah masuk | Perlu update jika ada integrasi baru |
+
+### 2. Cari hardcoded URL eksternal di kode
+Jalankan grep berikut sebelum deploy dan pastikan hasilnya kosong atau sudah di-allowlist di CSP:
+```
+# URL gambar eksternal (potensial CSP violation)
+grep -r "src=\"http" src/
+grep -r "src={'http" src/
+grep -r "pravatar\|picsum\|placeholder\|via\.placeholder\|lorempixel" src/
+```
+**URL gambar eksternal dilarang.** Gunakan fallback lokal (inisial, icon, atau asset di `public/`).
+
+### 3. Cek COOP header
+`Cross-Origin-Opener-Policy` harus `same-origin-allow-popups` (bukan `same-origin`) — nilai `same-origin` memblokir Firebase Auth popup.
+
+### 4. Build wajib sebelum deploy
+```
+npm run build
+firebase deploy --only hosting
+```
+Tanpa `npm run build`, folder `dist` tidak mengandung `index.html` → site error "Page Not Found".
+
+---
+
+## Deploy ke Firebase Hosting
+**WAJIB** jalankan build sebelum deploy — jangan pernah deploy tanpa build:
+```
+npm run build
+firebase deploy --only hosting
+```
+Tanpa `npm run build` terlebih dahulu, folder `dist` tidak mengandung `index.html` dan site akan menampilkan error "Page Not Found".
+
 Stack: React 19 + Vite + Firebase (Auth + Firestore + Storage + Functions),
 Tailwind CSS, Context API, react-to-print, html2canvas+jspdf, framer-motion,
 @dnd-kit, react-select, browser-image-compression, chart.js, recharts,

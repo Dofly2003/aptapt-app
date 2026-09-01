@@ -7,6 +7,7 @@ import {
   getAllStok, createStok, updateStok, removeStok, formatRupiah,
   getAllGudang, uploadBarangPhoto, deleteBarangPhoto,
 } from "../../services/inventoriService";
+import { useSecurePhotoUrls } from "../../hooks/useSecurePhotoUrls";
 
 const EMPTY = {
   kodeProduk: "", namaProduk: "", kategori: "", satuan: "pcs",
@@ -182,6 +183,7 @@ export default function StokBarang() {
     i.namaProduk?.toLowerCase().includes(search.toLowerCase()) ||
     i.kodeProduk?.toLowerCase().includes(search.toLowerCase())
   );
+  const photoUrls = useSecurePhotoUrls(items.map(i => i.fotoPath));
 
   const totalNilai = items.reduce(
     (s, i) => s + ((Number(i.stokAkhir) || 0) * (Number(i.hargaBeli) || 0)), 0
@@ -238,9 +240,9 @@ export default function StokBarang() {
                 {filtered.map(item => (
                   <tr key={item.id} className="hover:bg-slate-50">
                     <td className="px-3 py-2">
-                      {item.fotoUrl ? (
+                      {(photoUrls[item.fotoPath] || item.fotoUrl) ? (
                         <img
-                          src={item.fotoUrl} alt={item.namaProduk}
+                          src={photoUrls[item.fotoPath] || item.fotoUrl} alt={item.namaProduk}
                           className="w-10 h-10 rounded-lg object-cover border border-slate-200"
                         />
                       ) : (

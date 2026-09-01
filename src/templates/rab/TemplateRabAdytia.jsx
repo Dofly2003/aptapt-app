@@ -1,4 +1,4 @@
-import { formatRupiahPlain, formatTanggalLengkap, hitungTotal, terbilang } from "../../services/rabService";
+import { formatRupiahPlain, formatTanggalLengkap, hitungTotal, hitungSubtotalGroup, terbilang } from "../../services/rabService";
 
 // A4 at 96 dpi
 const A4_W = 794;
@@ -16,43 +16,70 @@ const C = {
   warn:   "#E65100",
 };
 
-// ── Estimate-based page splits (no DOM measurement required) ───────────────
-function estimatePageSplits(allItems, ppnAktif, hasFooter, marginPx, fontScale) {
-  const s         = fontScale;
-  const headerH   = Math.round(106 * s);           // navy header + gold bar
-  const footerH   = hasFooter ? Math.round(46 * s) : 0;
-  const topH      = Math.round(210 * s);            // date + InfoBlock + divider + pembukaan
-  const theadH    = Math.round(42 * s);
-  const rowH      = Math.round(42 * s);             // per item row (conservative)
-  const summaryH  = Math.round((ppnAktif ? 136 : 102) * s); // jumlah + ppn? + grand total + terbilang
-  const closingH  = Math.round(230 * s);            // catatan + masaBerlaku + closingMessage + signature
-  const tailH     = summaryH + closingH + 8;
+// ── Build flat rows from groups ────────────────────────────────────────────
+function buildFlatRows(groups, showSectionHeaders) {
+  const rows = [];
+  groups.forEach((grp, gIdx) => {
+    const letter = String.fromCharCode(65 + gIdx);
+    if (showSectionHeaders) {
+      rows.push({ type: "header", letter, nama: grp.nama, grpIdx: gIdx });
+    }
+    (grp.items || []).forEach((item, iIdx) => {
+      rows.push({ type: "item", item, localIdx: iIdx, grpIdx: gIdx, letter });
+    });
+    if (showSectionHeaders) {
+      rows.push({ type: "subtotal", letter, nama: grp.nama, grpIdx: gIdx });
+    }
+  });
+  return rows;
+}
+
+// ── Estimate-based page splits ─────────────────────────────────────────────
+function estimatePageSplits(flatRows, ppnAktif, hasFooter, marginPx, fontScale, showTTD) {
+  const s        = fontScale;
+  const headerH  = Math.round(106 * s);
+  const footerH  = hasFooter ? Math.round(46 * s) : 0;
+  const topH     = Math.round(210 * s);
+  const theadH   = Math.round(42 * s);
+  const grpHdrH  = Math.round(36 * s);
+  const rowH     = Math.round(42 * s);
+  const subH     = Math.round(36 * s);
+  const summaryH = Math.round((ppnAktif ? 136 : 102) * s);
+  const closingH = Math.round((showTTD !== false ? 230 : 140) * s);
+  const tailH    = summaryH + closingH + 8;
 
   const innerH     = A4_H - 2 * marginPx;
   const page1Avail = innerH - headerH - footerH - topH - theadH;
   const pageNAvail = innerH - headerH - footerH - theadH;
 
-  if (allItems.length === 0) return [{ start: 0, end: 0 }];
+  if (flatRows.length === 0) return [{ start: 0, end: 0 }];
+
+  const rh = (row) => {
+    if (row.type === "header")   return grpHdrH;
+    if (row.type === "subtotal") return subH;
+    return rowH;
+  };
 
   const splits = [];
   let pageStart = 0, isFirstPage = true, used = 0;
 
-  for (let i = 0; i < allItems.length; i++) {
-    const isLast = i === allItems.length - 1;
+  for (let i = 0; i < flatRows.length; i++) {
+    const isLast = i === flatRows.length - 1;
     const avail  = isFirstPage ? page1Avail : pageNAvail;
+    const h      = rh(flatRows[i]);
 
     if (isLast) {
-      if (i > pageStart && used + rowH + tailH > avail) {
+      if (i > pageStart && used + h + tailH > avail) {
         splits.push({ start: pageStart, end: i });
         pageStart = i; isFirstPage = false; used = 0;
       }
-    } else if (i > pageStart && used + rowH > avail - tailH) {
+    } else if (i > pageStart && used + h > avail - tailH) {
       splits.push({ start: pageStart, end: i });
       pageStart = i; isFirstPage = false; used = 0;
     }
-    used += rowH;
+    used += h;
   }
-  splits.push({ start: pageStart, end: allItems.length });
+  splits.push({ start: pageStart, end: flatRows.length });
   return splits;
 }
 
@@ -60,15 +87,23 @@ function estimatePageSplits(allItems, ppnAktif, hasFooter, marginPx, fontScale) 
 export default function TemplateRabAdytia({ data, instansi, pageMargin, fontScale = 1 }) {
   if (!data) return null;
 
-  const marginPx  = Math.round((pageMargin ?? 10) * MM_TO_PX);
-  const fs        = (pt) => `${pt * fontScale}pt`;
-  const allItems  = data.items || [];
-  const totals    = hitungTotal(allItems, data.ppnAktif !== false, 11);
-  const ppnAktif  = data.ppnAktif !== false;
-  const lokasi    = data.lokasi || deriveKota(instansi?.alamat) || "Gresik";
-  const hasFooter = !!(instansi?.alamat || instansi?.telp || instansi?.web);
+  const marginPx = Math.round((pageMargin ?? 10) * MM_TO_PX);
+  const fs       = (pt) => `${pt * fontScale}pt`;
 
-  const pageSplits = estimatePageSplits(allItems, ppnAktif, hasFooter, marginPx, fontScale);
+  // Support both new (groups) and legacy (items) format
+  const useGroups    = Boolean(data.groups?.length);
+  const groups       = useGroups
+    ? data.groups
+    : [{ id: "legacy", nama: null, items: data.items || [] }];
+  const flatRows     = buildFlatRows(groups, useGroups);
+  const allItems     = groups.flatMap(g => g.items || []);
+  const totals       = hitungTotal(allItems, data.ppnAktif !== false, 11);
+  const ppnAktif     = data.ppnAktif !== false;
+  const lokasi       = data.lokasi || deriveKota(instansi?.alamat) || "Gresik";
+  const hasFooter    = !!(instansi?.alamat || instansi?.telp || instansi?.web);
+  const pageSplits   = estimatePageSplits(flatRows, ppnAktif, hasFooter, marginPx, fontScale, data.showTTD);
+
+  const grandTotalLabel = "GRAND TOTAL";
 
   const FONT_BASE = {
     fontFamily: "'Plus Jakarta Sans', 'Inter', system-ui, sans-serif",
@@ -87,14 +122,9 @@ export default function TemplateRabAdytia({ data, instansi, pageMargin, fontScal
 
   const PAGE_SHELL = {
     ...FONT_BASE,
-    width: A4_W,
-    height: A4_H,
-    background: "#fff",
-    overflow: "hidden",
-    boxSizing: "border-box",
-    padding: marginPx,
-    display: "flex",
-    flexDirection: "column",
+    width: A4_W, height: A4_H,
+    background: "#fff", overflow: "hidden", boxSizing: "border-box",
+    padding: marginPx, display: "flex", flexDirection: "column",
   };
 
   return (
@@ -113,9 +143,10 @@ export default function TemplateRabAdytia({ data, instansi, pageMargin, fontScal
       `}</style>
 
       {pageSplits.map((split, pageIdx) => {
-        const isFirst   = pageIdx === 0;
-        const isLast    = pageIdx === pageSplits.length - 1;
-        const pageItems = allItems.slice(split.start, split.end);
+        const isFirst    = pageIdx === 0;
+        const isLast     = pageIdx === pageSplits.length - 1;
+        const pageRows   = flatRows.slice(split.start, split.end);
+        let   itemSeqNum = 0;
 
         return (
           <div key={pageIdx} className="laporan-page-sheet" style={PAGE_SHELL}>
@@ -158,17 +189,53 @@ export default function TemplateRabAdytia({ data, instansi, pageMargin, fontScal
                   </tr>
                 </thead>
                 <tbody>
-                  {pageItems.map((it, i) => {
-                    const globalIdx = split.start + i;
-                    const jml = (Number(it.volume) || 0) * (Number(it.hargaSatuan) || 0);
+                  {pageRows.map((row, ri) => {
+                    if (row.type === "header") {
+                      itemSeqNum = 0;
+                      return (
+                        <tr key={`hdr-${row.grpIdx}-${pageIdx}`}>
+                          <td colSpan={6} style={{
+                            ...TD,
+                            background: "#1B3464",
+                            color: "#fff",
+                            fontWeight: 700,
+                            fontSize: fs(10),
+                            letterSpacing: "0.5px",
+                            borderColor: "#5577AA",
+                          }}>
+                            {row.nama}
+                          </td>
+                        </tr>
+                      );
+                    }
+
+                    if (row.type === "subtotal") {
+                      const sub = hitungSubtotalGroup(groups[row.grpIdx]?.items);
+                      return (
+                        <tr key={`sub-${row.grpIdx}-${pageIdx}`} style={{ background: "#EEF4FF" }}>
+                          <td colSpan={5} style={{ ...TD, textAlign: "right", fontWeight: 700, fontSize: fs(10), color: C.navy }}>
+                            JUMLAH {groups[row.grpIdx]?.nama || ""}
+                          </td>
+                          <td style={{ ...TD, textAlign: "right", fontWeight: 700, fontFamily: "monospace", color: C.navy }}>
+                            {formatRupiahPlain(sub)}
+                          </td>
+                        </tr>
+                      );
+                    }
+
+                    // item row
+                    const localNum = row.localIdx + 1;
+                    const jml = (Number(row.item.volume) || 0) * (Number(row.item.hargaSatuan) || 0);
+                    const even = row.localIdx % 2 === 0;
+                    itemSeqNum++;
                     return (
-                      <tr key={it.id || globalIdx}
-                        className={`rab-tr ${globalIdx % 2 === 0 ? "rab-tr-odd" : "rab-tr-even"}`}>
-                        <td style={{ ...TD, textAlign: "center" }}>{globalIdx + 1}</td>
-                        <td style={TD}>{it.nama}</td>
-                        <td style={{ ...TD, textAlign: "center" }}>{it.satuan}</td>
-                        <td style={{ ...TD, textAlign: "center" }}>{it.volume}</td>
-                        <td style={{ ...TD, textAlign: "right", fontFamily: "monospace" }}>{formatRupiahPlain(it.hargaSatuan)}</td>
+                      <tr key={row.item.id || ri}
+                        className={`rab-tr ${even ? "rab-tr-odd" : "rab-tr-even"}`}>
+                        <td style={{ ...TD, textAlign: "center" }}>{localNum}</td>
+                        <td style={TD}>{row.item.nama}</td>
+                        <td style={{ ...TD, textAlign: "center" }}>{row.item.satuan}</td>
+                        <td style={{ ...TD, textAlign: "center" }}>{row.item.volume}</td>
+                        <td style={{ ...TD, textAlign: "right", fontFamily: "monospace" }}>{formatRupiahPlain(row.item.hargaSatuan)}</td>
                         <td style={{ ...TD, textAlign: "right", fontFamily: "monospace" }}>{formatRupiahPlain(jml)}</td>
                       </tr>
                     );
@@ -189,7 +256,7 @@ export default function TemplateRabAdytia({ data, instansi, pageMargin, fontScal
                       </tr>
                     )}
                     <tr style={{ background: C.navy }}>
-                      <td colSpan={5} style={{ ...TD, border: `1px solid #5577AA`, textAlign: "right", fontWeight: 800, fontSize: fs(12), color: "#fff" }}>GRAND TOTAL</td>
+                      <td colSpan={5} style={{ ...TD, border: `1px solid #5577AA`, textAlign: "right", fontWeight: 800, fontSize: fs(12), color: "#fff" }}>{grandTotalLabel}</td>
                       <td style={{ ...TD, border: `1px solid #5577AA`, textAlign: "right", fontWeight: 800, fontSize: fs(12), color: C.gold, fontFamily: "monospace" }}>{formatRupiahPlain(totals.grandTotal)}</td>
                     </tr>
                     <tr>
@@ -213,7 +280,9 @@ export default function TemplateRabAdytia({ data, instansi, pageMargin, fontScal
                   {data.closingMessage && (
                     <p style={{ margin: "20px 0 16px", textAlign: "justify", lineHeight: 1.7 }}>{data.closingMessage}</p>
                   )}
-                  <SignatureBlock ttd={data.ttd} instansi={instansi} fs={fs} />
+                  {data.showTTD !== false && (
+                    <SignatureBlock ttd={data.ttd} instansi={instansi} fs={fs} />
+                  )}
                 </>
               )}
             </div>

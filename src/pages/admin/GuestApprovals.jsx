@@ -122,6 +122,7 @@ export default function GuestApprovals() {
         </div>
       ) : (
         <div className="border border-slate-200 rounded-xl overflow-hidden">
+          <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="bg-slate-50 border-b border-slate-200">
               <tr>
@@ -153,6 +154,7 @@ export default function GuestApprovals() {
               ))}
             </tbody>
           </table>
+          </div>
         </div>
       )}
 

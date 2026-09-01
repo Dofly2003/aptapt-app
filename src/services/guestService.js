@@ -75,6 +75,9 @@ export async function createGuestAccount({ username, password, displayName, expi
     guestIsActive: true,
   });
 
+  // Tulis ke username index (fallback jika guest email format tidak cocok)
+  await setDoc(doc(db, "usernames", username), { email, uid });
+
   // Simpan di guest_accounts (untuk manajemen oleh superadmin)
   await setDoc(doc(db, "guest_accounts", uid), {
     uid,
@@ -114,8 +117,13 @@ export async function updateGuestAccount(uid, data) {
 }
 
 export async function deleteGuestAccount(uid) {
+  const guestSnap = await getDoc(doc(db, "guest_accounts", uid));
+  const username = guestSnap.data()?.username;
+
   await deleteDoc(doc(db, "guest_accounts", uid));
   await updateDoc(doc(db, "users", uid), { disabled: true, role: "deleted_guest" });
+
+  if (username) await deleteDoc(doc(db, "usernames", username));
 }
 
 export async function getGuestAccounts() {

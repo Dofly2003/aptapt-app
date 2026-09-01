@@ -1,0 +1,524 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Panduan Akses Invoice — PT Adytia Putra Tehnik</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Segoe UI', Arial, sans-serif;
+      background: #f1f5f9;
+      color: #1e293b;
+      line-height: 1.6;
+    }
+
+    /* ── HEADER ── */
+    .header {
+      background: linear-gradient(135deg, #0f172a 0%, #1e293b 60%, #0f172a 100%);
+      padding: 40px 24px 36px;
+      text-align: center;
+    }
+    .logo-ring {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 72px; height: 72px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #f59e0b, #f97316);
+      box-shadow: 0 0 40px rgba(245,158,11,.35);
+      margin-bottom: 16px;
+    }
+    .logo-ring svg { width: 36px; height: 36px; fill: white; }
+    .header h1 { color: #fff; font-size: 1.5rem; font-weight: 700; letter-spacing: -.3px; }
+    .header p  { color: #94a3b8; font-size: .9rem; margin-top: 4px; }
+
+    /* ── BADGE URL ── */
+    .url-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: rgba(245,158,11,.15);
+      border: 1px solid rgba(245,158,11,.35);
+      border-radius: 8px;
+      padding: 10px 18px;
+      margin-top: 20px;
+      font-size: .85rem;
+      color: #fcd34d;
+      font-family: monospace;
+      word-break: break-all;
+    }
+    .url-badge svg { width: 16px; height: 16px; fill: none; stroke: #fcd34d; stroke-width: 2; flex-shrink: 0; }
+
+    /* ── WRAPPER ── */
+    .content {
+      max-width: 720px;
+      margin: 0 auto;
+      padding: 32px 16px 60px;
+    }
+
+    /* ── SECTION TITLE ── */
+    .section-title {
+      font-size: .7rem;
+      font-weight: 700;
+      letter-spacing: 1.2px;
+      text-transform: uppercase;
+      color: #64748b;
+      margin-bottom: 14px;
+      margin-top: 36px;
+    }
+
+    /* ── STEP CARD ── */
+    .step {
+      background: #fff;
+      border-radius: 14px;
+      padding: 22px 22px 22px 70px;
+      margin-bottom: 14px;
+      position: relative;
+      box-shadow: 0 1px 4px rgba(0,0,0,.07), 0 4px 16px rgba(0,0,0,.04);
+      border: 1px solid #e2e8f0;
+    }
+    .step-num {
+      position: absolute;
+      left: 18px; top: 22px;
+      width: 36px; height: 36px;
+      border-radius: 50%;
+      background: #f59e0b;
+      color: #fff;
+      font-weight: 800;
+      font-size: .95rem;
+      display: flex; align-items: center; justify-content: center;
+      box-shadow: 0 2px 8px rgba(245,158,11,.4);
+    }
+    .step h3 {
+      font-size: 1rem;
+      font-weight: 700;
+      color: #0f172a;
+      margin-bottom: 6px;
+    }
+    .step p {
+      font-size: .88rem;
+      color: #475569;
+      margin-bottom: 0;
+    }
+    .step p + p { margin-top: 6px; }
+
+    /* ── PILIHAN LOGIN ── */
+    .choices {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      margin-top: 14px;
+    }
+    @media (max-width: 540px) { .choices { grid-template-columns: 1fr; } }
+
+    .choice-card {
+      border-radius: 12px;
+      padding: 16px 18px;
+      border: 2px solid transparent;
+    }
+    .choice-card.google {
+      background: #eff6ff;
+      border-color: #bfdbfe;
+    }
+    .choice-card.pw {
+      background: #fff7ed;
+      border-color: #fed7aa;
+    }
+    .choice-card h4 {
+      font-size: .88rem;
+      font-weight: 700;
+      margin-bottom: 6px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .choice-card.google h4 { color: #1d4ed8; }
+    .choice-card.pw     h4 { color: #c2410c; }
+    .choice-card p {
+      font-size: .82rem;
+      color: #64748b;
+      line-height: 1.55;
+    }
+
+    /* ── AKUN DEFAULT BOX ── */
+    .default-box {
+      background: #fefce8;
+      border: 2px dashed #fde68a;
+      border-radius: 14px;
+      padding: 20px 24px;
+      margin-top: 14px;
+    }
+    .default-box .label {
+      font-size: .72rem;
+      font-weight: 700;
+      letter-spacing: .8px;
+      text-transform: uppercase;
+      color: #92400e;
+      margin-bottom: 10px;
+    }
+    .cred-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 8px;
+    }
+    .cred-row:last-child { margin-bottom: 0; }
+    .cred-label {
+      font-size: .8rem;
+      color: #78350f;
+      width: 90px;
+      flex-shrink: 0;
+      font-weight: 600;
+    }
+    .cred-val {
+      font-family: monospace;
+      font-size: .92rem;
+      font-weight: 700;
+      background: #fff;
+      border: 1px solid #fde68a;
+      border-radius: 7px;
+      padding: 5px 14px;
+      color: #1e293b;
+      flex: 1;
+      letter-spacing: .3px;
+    }
+    .cred-note {
+      font-size: .78rem;
+      color: #92400e;
+      margin-top: 10px;
+      line-height: 1.55;
+    }
+
+    /* ── ARROW CONNECTOR ── */
+    .arrow {
+      text-align: center;
+      color: #cbd5e1;
+      font-size: 1.4rem;
+      margin: 2px 0;
+      user-select: none;
+    }
+
+    /* ── TIP BOX ── */
+    .tip {
+      display: flex;
+      gap: 12px;
+      background: #f0fdf4;
+      border: 1px solid #bbf7d0;
+      border-radius: 12px;
+      padding: 14px 18px;
+      margin-top: 10px;
+      font-size: .84rem;
+      color: #14532d;
+    }
+    .tip svg { width: 18px; height: 18px; fill: none; stroke: #16a34a; stroke-width: 2; flex-shrink: 0; margin-top: 1px; }
+
+    .warn {
+      display: flex;
+      gap: 12px;
+      background: #fff7ed;
+      border: 1px solid #fed7aa;
+      border-radius: 12px;
+      padding: 14px 18px;
+      margin-top: 10px;
+      font-size: .84rem;
+      color: #7c2d12;
+    }
+    .warn svg { width: 18px; height: 18px; fill: none; stroke: #ea580c; stroke-width: 2; flex-shrink: 0; margin-top: 1px; }
+
+    /* ── INLINE CODE ── */
+    code {
+      background: #f1f5f9;
+      border: 1px solid #e2e8f0;
+      border-radius: 5px;
+      padding: 1px 7px;
+      font-family: monospace;
+      font-size: .9em;
+      color: #0f172a;
+    }
+
+    /* ── DIVIDER ── */
+    .or-divider {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin: 10px 0;
+      font-size: .78rem;
+      color: #94a3b8;
+      font-weight: 600;
+    }
+    .or-divider::before, .or-divider::after {
+      content: '';
+      flex: 1;
+      height: 1px;
+      background: #e2e8f0;
+    }
+
+    /* ── FOOTER ── */
+    .footer {
+      text-align: center;
+      padding: 24px;
+      font-size: .8rem;
+      color: #94a3b8;
+      border-top: 1px solid #e2e8f0;
+      background: #fff;
+      margin-top: 0;
+    }
+
+    /* ── PRINT ── */
+    @media print {
+      body { background: #fff; }
+      .step { box-shadow: none; border: 1px solid #e2e8f0; break-inside: avoid; }
+      .choice-card { break-inside: avoid; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- HEADER -->
+<div class="header">
+  <div class="logo-ring">
+    <svg viewBox="0 0 24 24"><path d="M13 2L3 14h8l-1 8 10-12h-8l1-8z"/></svg>
+  </div>
+  <h1>PT Adytia Putra Tehnik</h1>
+  <p>Panduan Akses Halaman Invoice</p>
+  <div class="url-badge">
+    <svg viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"/></svg>
+    https://pt-adytia.com/dashboard/invoice
+  </div>
+</div>
+
+<!-- KONTEN -->
+<div class="content">
+
+  <!-- LANGKAH 1 -->
+  <p class="section-title">Langkah-langkah</p>
+
+  <div class="step">
+    <div class="step-num">1</div>
+    <h3>Buka halaman login</h3>
+    <p>Buka browser (Chrome, Edge, atau Firefox), lalu ketik atau klik tautan berikut di address bar:</p>
+    <div style="margin-top:10px;">
+      <a href="https://pt-adytia.com/login" target="_blank"
+         style="display:inline-block; background:#0f172a; color:#fcd34d; font-family:monospace; font-size:.88rem;
+                padding:8px 16px; border-radius:8px; text-decoration:none; font-weight:700; letter-spacing:.2px;">
+        https://pt-adytia.com/login
+      </a>
+    </div>
+    <div class="tip" style="margin-top:12px;">
+      <svg viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+      Pastikan koneksi internet aktif. Halaman akan menampilkan form login dengan logo PT Adytia Putra Tehnik.
+    </div>
+  </div>
+
+  <div class="arrow">↓</div>
+
+  <!-- LANGKAH 2 -->
+  <div class="step">
+    <div class="step-num">2</div>
+    <h3>Login ke akun Anda</h3>
+    <p>Pilih salah satu cara masuk sesuai akun yang Anda miliki:</p>
+
+    <div class="choices">
+      <!-- GOOGLE -->
+      <div class="choice-card google">
+        <h4>
+          <svg style="width:18px;height:18px;flex-shrink:0" viewBox="0 0 24 24">
+            <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+            <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+            <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
+            <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+          </svg>
+          Masuk dengan Google
+        </h4>
+        <p>Klik tombol <strong>"Masuk dengan Google"</strong> di bagian bawah form, lalu pilih akun Google yang sudah terdaftar. Browser akan membuka jendela pilih akun Google secara otomatis.</p>
+      </div>
+
+      <!-- EMAIL/PASSWORD -->
+      <div class="choice-card pw">
+        <h4>
+          <svg style="width:18px;height:18px;fill:none;stroke:#c2410c;stroke-width:2;flex-shrink:0" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/>
+          </svg>
+          Username / Email + Password
+        </h4>
+        <p>Isi kolom <strong>Username / Email</strong> dengan username atau alamat email Anda, kemudian isi <strong>Password</strong>, lalu klik tombol <strong>"Masuk"</strong>.</p>
+      </div>
+    </div>
+
+    <div class="warn" style="margin-top:14px;">
+      <svg viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
+      <span>Jika muncul pesan <em>"Email atau password salah"</em>, periksa kembali penulisan. Pastikan tidak ada spasi di awal/akhir. Gunakan ikon mata (👁) untuk memeriksa password.</span>
+    </div>
+  </div>
+
+  <div class="arrow">↓</div>
+
+  <!-- LANGKAH 3 — AKUN DEFAULT -->
+  <div class="step">
+    <div class="step-num">3</div>
+    <h3>Belum punya akun? Gunakan akun default</h3>
+    <p>Jika Anda belum memiliki akun atau belum didaftarkan oleh admin, gunakan akun berikut:</p>
+
+    <div class="default-box">
+      <div class="label">Akun Default — Hanya untuk akses Invoice</div>
+      <div class="cred-row">
+        <span class="cred-label">Username</span>
+        <span class="cred-val">akun-rab-invoice</span>
+      </div>
+      <div class="cred-row">
+        <span class="cred-label">Password</span>
+        <span class="cred-val">akun-rab-invoice</span>
+      </div>
+      <p class="cred-note">
+        ⚠️ Akun ini dibagikan ke beberapa staf. Jangan ubah password akun ini. Jika Anda perlu akun pribadi, hubungi admin.
+      </p>
+    </div>
+  </div>
+
+  <div class="arrow">↓</div>
+
+  <!-- LANGKAH 4 — SETELAH LOGIN -->
+  <div class="step">
+    <div class="step-num">4</div>
+    <h3>Setelah login berhasil</h3>
+    <p>Setelah masuk, sistem akan membawa Anda ke halaman dashboard utama. Selanjutnya buka halaman Invoice dengan salah satu cara:</p>
+
+    <div style="margin-top:14px; display:flex; flex-direction:column; gap:10px;">
+
+      <!-- cara A -->
+      <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:10px; padding:14px 16px;">
+        <div style="font-size:.78rem; font-weight:700; color:#64748b; text-transform:uppercase; letter-spacing:.8px; margin-bottom:6px;">Cara A — Akses Langsung (Paling Mudah)</div>
+        <p style="font-size:.86rem; color:#475569;">
+          Klik atau ketik langsung di address bar browser:
+        </p>
+        <div style="margin-top:8px;">
+          <a href="https://pt-adytia.com/dashboard/invoice" target="_blank"
+             style="display:inline-block; background:#0f172a; color:#fcd34d; font-family:monospace; font-size:.85rem;
+                    padding:7px 14px; border-radius:7px; text-decoration:none; font-weight:700;">
+            https://pt-adytia.com/dashboard/invoice
+          </a>
+        </div>
+      </div>
+
+      <!-- cara B -->
+      <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:10px; padding:14px 16px;">
+        <div style="font-size:.78rem; font-weight:700; color:#64748b; text-transform:uppercase; letter-spacing:.8px; margin-bottom:6px;">Cara B — Lewat Menu Navigasi</div>
+        <p style="font-size:.86rem; color:#475569; line-height:1.7;">
+          Di sidebar kiri dashboard, cari menu
+          <strong style="color:#0f172a;">Penjualan</strong>
+          →
+          <strong style="color:#0f172a;">Invoice</strong>.
+          Klik untuk membuka halaman.
+        </p>
+      </div>
+
+    </div>
+
+    <div class="tip" style="margin-top:12px;">
+      <svg viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+      <span><strong>Tips:</strong> Simpan link <code>https://pt-adytia.com/dashboard/invoice</code> ke bookmark/favorit browser agar tidak perlu mengetik ulang setiap kali.</span>
+    </div>
+  </div>
+
+  <div class="arrow">↓</div>
+
+  <!-- LANGKAH 5 — DI HALAMAN INVOICE -->
+  <div class="step">
+    <div class="step-num">5</div>
+    <h3>Di halaman Invoice</h3>
+    <p>Halaman Invoice menampilkan daftar semua tagihan. Berikut hal-hal yang bisa Anda lakukan:</p>
+
+    <div style="margin-top:14px; display:flex; flex-direction:column; gap:8px;">
+
+      <div style="display:flex; gap:12px; align-items:flex-start; padding:10px 14px; background:#f8fafc; border-radius:9px; border:1px solid #e2e8f0;">
+        <span style="background:#dbeafe; color:#1d4ed8; border-radius:6px; padding:2px 8px; font-size:.75rem; font-weight:700; flex-shrink:0; margin-top:2px;">LIHAT</span>
+        <p style="font-size:.85rem; color:#475569; margin:0;">Daftar semua invoice beserta nama pelanggan, tanggal, total nominal, dan status pembayaran (<em>Belum Dibayar / Sebagian / Lunas</em>).</p>
+      </div>
+
+      <div style="display:flex; gap:12px; align-items:flex-start; padding:10px 14px; background:#f8fafc; border-radius:9px; border:1px solid #e2e8f0;">
+        <span style="background:#d1fae5; color:#065f46; border-radius:6px; padding:2px 8px; font-size:.75rem; font-weight:700; flex-shrink:0; margin-top:2px;">BUAT</span>
+        <p style="font-size:.85rem; color:#475569; margin:0;">Klik tombol <strong>"+ Tambah"</strong> di pojok kanan atas untuk membuat invoice baru. Isi nomor invoice, nama pelanggan, tanggal, jatuh tempo, dan nominal.</p>
+      </div>
+
+      <div style="display:flex; gap:12px; align-items:flex-start; padding:10px 14px; background:#f8fafc; border-radius:9px; border:1px solid #e2e8f0;">
+        <span style="background:#fef3c7; color:#92400e; border-radius:6px; padding:2px 8px; font-size:.75rem; font-weight:700; flex-shrink:0; margin-top:2px;">EDIT</span>
+        <p style="font-size:.85rem; color:#475569; margin:0;">Klik ikon pensil (<strong>✏</strong>) di baris invoice untuk mengubah data atau memperbarui status pembayaran.</p>
+      </div>
+
+      <div style="display:flex; gap:12px; align-items:flex-start; padding:10px 14px; background:#f8fafc; border-radius:9px; border:1px solid #e2e8f0;">
+        <span style="background:#fee2e2; color:#991b1b; border-radius:6px; padding:2px 8px; font-size:.75rem; font-weight:700; flex-shrink:0; margin-top:2px;">HAPUS</span>
+        <p style="font-size:.85rem; color:#475569; margin:0;">Klik ikon tong sampah (<strong>🗑</strong>) untuk menghapus invoice. Akan muncul konfirmasi sebelum data dihapus permanen.</p>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- LOGOUT -->
+  <p class="section-title" style="margin-top:32px;">Selesai / Keluar</p>
+
+  <div class="step">
+    <div class="step-num" style="background:#64748b;">↩</div>
+    <h3>Cara keluar (logout)</h3>
+    <p>Setelah selesai bekerja, selalu logout untuk keamanan akun:</p>
+    <p style="margin-top:8px;">Klik <strong>foto profil / inisial nama</strong> di pojok kanan atas halaman → klik tombol <strong>"Keluar"</strong>.</p>
+    <div class="warn" style="margin-top:12px;">
+      <svg viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
+      <span>Jika menggunakan <strong>akun default bersama</strong>, wajib logout setelah selesai agar staf lain tetap bisa masuk.</span>
+    </div>
+  </div>
+
+  <!-- MASALAH UMUM -->
+  <p class="section-title" style="margin-top:32px;">Masalah Umum &amp; Solusi</p>
+
+  <div style="background:#fff; border:1px solid #e2e8f0; border-radius:14px; overflow:hidden; box-shadow:0 1px 4px rgba(0,0,0,.06);">
+    <table style="width:100%; border-collapse:collapse; font-size:.85rem;">
+      <thead>
+        <tr style="background:#f8fafc;">
+          <th style="text-align:left; padding:12px 16px; color:#475569; font-weight:700; border-bottom:1px solid #e2e8f0; width:45%;">Masalah</th>
+          <th style="text-align:left; padding:12px 16px; color:#475569; font-weight:700; border-bottom:1px solid #e2e8f0;">Solusi</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr style="border-bottom:1px solid #f1f5f9;">
+          <td style="padding:12px 16px; color:#0f172a;">Halaman tidak mau terbuka</td>
+          <td style="padding:12px 16px; color:#475569;">Periksa koneksi internet. Coba refresh browser (tekan <code>F5</code>).</td>
+        </tr>
+        <tr style="border-bottom:1px solid #f1f5f9;">
+          <td style="padding:12px 16px; color:#0f172a;">"Email atau password salah"</td>
+          <td style="padding:12px 16px; color:#475569;">Periksa penulisan username/password. Gunakan akun default jika perlu.</td>
+        </tr>
+        <tr style="border-bottom:1px solid #f1f5f9;">
+          <td style="padding:12px 16px; color:#0f172a;">Login Google tidak bisa / jendela Google tidak muncul</td>
+          <td style="padding:12px 16px; color:#475569;">Pastikan browser tidak memblokir pop-up. Coba gunakan login username + password sebagai alternatif.</td>
+        </tr>
+        <tr style="border-bottom:1px solid #f1f5f9;">
+          <td style="padding:12px 16px; color:#0f172a;">Setelah login diarahkan ke halaman lain, bukan Invoice</td>
+          <td style="padding:12px 16px; color:#475569;">Normal. Klik langsung link <code>/dashboard/invoice</code> setelah masuk, atau buka dari menu Penjualan.</td>
+        </tr>
+        <tr>
+          <td style="padding:12px 16px; color:#0f172a;">"Akun ini telah dinonaktifkan"</td>
+          <td style="padding:12px 16px; color:#475569;">Hubungi admin sistem untuk mengaktifkan kembali akun Anda.</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- KONTAK -->
+  <div style="background:#fff; border:1px solid #e2e8f0; border-radius:14px; padding:20px 24px; margin-top:16px; box-shadow:0 1px 4px rgba(0,0,0,.06);">
+    <div style="font-size:.78rem; font-weight:700; color:#64748b; text-transform:uppercase; letter-spacing:.8px; margin-bottom:10px;">Butuh Bantuan?</div>
+    <p style="font-size:.86rem; color:#475569; line-height:1.65;">
+      Hubungi admin sistem PT Adytia Putra Tehnik untuk pembuatan akun pribadi, reset password, atau masalah akses lainnya.
+    </p>
+  </div>
+
+</div>
+
+<!-- FOOTER -->
+<div class="footer">
+  © 2026 PT Adytia Putra Tehnik &nbsp;·&nbsp; Sistem Informasi Manajemen &nbsp;·&nbsp; Dokumen internal, jangan disebarluaskan
+</div>
+
+</body>
+</html>

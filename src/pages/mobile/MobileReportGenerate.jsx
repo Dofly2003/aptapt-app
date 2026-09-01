@@ -6,6 +6,7 @@ import jsPDF from "jspdf";
 import { useLoading } from "../../context/LoadingContext";
 import autoTable from "jspdf-autotable";
 import { useReactToPrint } from "react-to-print";
+import { inlineImgsForPrint } from "../../utils/inlineImgsForPrint";
 import { generateHasilPengujianPDF } from "../../utils/generateHasilPengujianPDF";
 export default function LaporanPengujianWeb() {
     const { id } = useParams();
@@ -15,9 +16,18 @@ export default function LaporanPengujianWeb() {
 
     const printRef = useRef();
 
+    const restoreImgs = useRef(null);
+
     const handlePrint = useReactToPrint({
         contentRef: printRef,
         documentTitle: `laporan-${data?.nama || "pengujian"}`,
+        onBeforePrint: async () => {
+            if (printRef.current) restoreImgs.current = await inlineImgsForPrint(printRef.current);
+        },
+        onAfterPrint: () => {
+            restoreImgs.current?.();
+            restoreImgs.current = null;
+        },
     });
 
     // ================= REALTIME =================

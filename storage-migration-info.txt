@@ -1,0 +1,895 @@
+STORAGE MIGRATION INFO — RAW FILE DUMP
+PT Adytia Putra Tehnik - dashboard
+Dibuat: 30 Agustus 2026
+
+Isi file ini adalah KONTEN MENTAH (apa adanya, tanpa ringkasan) dari:
+  1. functions/index.js + functions/package.json
+  2. ptadytiapt/index.js
+  3. storage.rules
+  4. src/firebase/config.js
+  5. firebase.json
+  6. Hasil grep di src/ untuk: firebase/storage, getDownloadURL,
+     uploadBytes, getStorage
+
+##############################################################
+# 1a. functions/index.js
+##############################################################
+
+const { onCall, HttpsError } = require("firebase-functions/v2/https");
+const { defineSecret } = require("firebase-functions/params");
+const admin = require("firebase-admin");
+const crypto = require("crypto");
+admin.initializeApp();
+
+// Key disimpan di Firebase Secret Manager — TIDAK pernah masuk kode/git
+// Setup sekali: firebase functions:secrets:set ENCRYPT_KEY
+const ENCRYPT_KEY_SECRET    = defineSecret("ENCRYPT_KEY");
+const CLOUDCONVERT_API_KEY  = defineSecret("CLOUDCONVERT_API_KEY");
+
+// ─── Path validation helpers ──────────────────────────────────────────────────
+
+const ALLOWED_PATH_RULES = [
+  { prefix: "pengujian/",  ownerSegment: 1 },
+  { prefix: "instansi/",   ownerSegment: null },
+  { prefix: "dpp/",        ownerSegment: null },
+  { prefix: "users/",      ownerSegment: 1 },
+  { prefix: "nidi_data/",  ownerSegment: null },
+];
+
+function validatePath(filePath, uid) {
+  if (!filePath || typeof filePath !== "string") return false;
+  // Decode terlebih dahulu untuk menangkap semua encoding variant
+  let decoded;
+  try { decoded = decodeURIComponent(filePath); } catch { return false; }
+  if (decoded.includes("..") || decoded.includes("\x00") || decoded.startsWith("/")) return false;
+  // Tolak jika masih ada URL encoding setelah decode (double encoding)
+  if (filePath.includes("%")) return false;
+  const rule = ALLOWED_PATH_RULES.find(r => filePath.startsWith(r.prefix));
+  if (!rule) return false;
+  if (rule.ownerSegment !== null) {
+    const segments = filePath.split("/");
+    if (segments[rule.ownerSegment] !== uid) return false;
+  }
+  return true;
+}
+
+// ─── Rate limiter (per UID, per action, per jam) ─────────────────────────────
+async function checkRateLimit(uid, action, maxPerHour = 20) {
+  const ref = admin.firestore().doc(`rate_limits/${uid}_${action}`);
+  const snap = await ref.get();
+  const now = Date.now();
+  const data = snap.exists ? snap.data() : { count: 0, windowStart: now };
+  if (now - data.windowStart > 3600000) {
+    await ref.set({ count: 1, windowStart: now });
+    return;
+  }
+  if (data.count >= maxPerHour) {
+    throw new HttpsError("resource-exhausted", "Terlalu banyak permintaan, coba lagi nanti");
+  }
+  await ref.update({ count: admin.firestore.FieldValue.increment(1) });
+}
+
+async function isAdmin(uid) {
+  try {
+    const snap = await admin.firestore().doc(`users/${uid}`).get();
+    if (!snap.exists) return false;
+    const d = snap.data();
+    return (d.role === "admin" || d.role === "superadmin") && d.disabled !== true;
+  } catch {
+    return false;
+  }
+}
+
+// ─── Secure Download URL ──────────────────────────────────────────────────────
+
+exports.getSecureDownloadUrl = onCall(async (request) => {
+  if (!request.auth) {
+    throw new HttpsError("unauthenticated", "Harus login");
+  }
+
+  const uid = request.auth.uid;
+  await checkRateLimit(uid, "download", 60);
+  const filePath = request.data.path;
+
+  const pathOk = validatePath(filePath, uid);
+  if (!pathOk) {
+    const adminUser = await isAdmin(uid);
+    if (!adminUser) throw new HttpsError("permission-denied", "Akses ditolak");
+    // Admin fallback: apply same decode + encoding check as validatePath
+    if (!filePath || typeof filePath !== "string") {
+      throw new HttpsError("invalid-argument", "Path tidak valid");
+    }
+    let decodedPath;
+    try { decodedPath = decodeURIComponent(filePath); } catch {
+      throw new HttpsError("invalid-argument", "Path encoding tidak valid");
+    }
+    if (decodedPath.includes("..") || decodedPath.includes("\x00") ||
+        decodedPath.startsWith("/") || filePath.includes("%")) {
+      throw new HttpsError("invalid-argument", "Path tidak valid");
+    }
+  }
+
+  try {
+    const bucket = admin.storage().bucket();
+    const file = bucket.file(filePath);
+    const [exists] = await file.exists();
+    if (!exists) throw new HttpsError("not-found", "File tidak ditemukan");
+
+    const [url] = await file.getSignedUrl({
+      action: "read",
+      expires: Date.now() + 30 * 1000,
+    });
+    return { url };
+  } catch (err) {
+    if (err instanceof HttpsError) throw err;
+    throw new HttpsError("internal", "Terjadi kesalahan server");
+  }
+});
+
+// ─── Enkripsi/Dekripsi (key dari Secret Manager, TIDAK dari .env) ─────────────
+
+exports.encryptData = onCall(
+  { secrets: [ENCRYPT_KEY_SECRET] },
+  async (request) => {
+    if (!request.auth) throw new HttpsError("unauthenticated", "Harus login");
+
+    const adminUser = await isAdmin(request.auth.uid);
+    if (!adminUser) throw new HttpsError("permission-denied", "Akses ditolak");
+    await checkRateLimit(request.auth.uid, "encrypt", 30);
+
+    const { plaintext } = request.data;
+    if (!plaintext || typeof plaintext !== "string") {
+      throw new HttpsError("invalid-argument", "plaintext wajib diisi");
+    }
+
+    const keyHex = ENCRYPT_KEY_SECRET.value().trim();
+    if (keyHex.length !== 64) throw new HttpsError("internal", "Konfigurasi enkripsi tidak valid");
+    const key = Buffer.from(keyHex, "hex");
+    if (key.length !== 32) throw new HttpsError("internal", "Kunci enkripsi tidak valid");
+    const iv = crypto.randomBytes(12);
+    const cipher = crypto.createCipheriv("aes-256-gcm", key, iv);
+    const encrypted = Buffer.concat([cipher.update(plaintext, "utf8"), cipher.final()]);
+    const tag = cipher.getAuthTag();
+    const combined = Buffer.concat([iv, tag, encrypted]);
+    return { ciphertext: combined.toString("base64") };
+  }
+);
+
+exports.decryptData = onCall(
+  { secrets: [ENCRYPT_KEY_SECRET] },
+  async (request) => {
+    if (!request.auth) throw new HttpsError("unauthenticated", "Harus login");
+
+    const adminUser = await isAdmin(request.auth.uid);
+    if (!adminUser) throw new HttpsError("permission-denied", "Akses ditolak");
+    await checkRateLimit(request.auth.uid, "decrypt", 30);
+
+    const { ciphertext } = request.data;
+    if (!ciphertext || typeof ciphertext !== "string") {
+      throw new HttpsError("invalid-argument", "ciphertext wajib diisi");
+    }
+
+    try {
+      const keyHex = ENCRYPT_KEY_SECRET.value().trim();
+      if (keyHex.length !== 64) throw new HttpsError("internal", "Konfigurasi enkripsi tidak valid");
+      const key = Buffer.from(keyHex, "hex");
+      if (key.length !== 32) throw new HttpsError("internal", "Kunci enkripsi tidak valid");
+      const buf = Buffer.from(ciphertext, "base64");
+      const iv = buf.slice(0, 12);
+      const tag = buf.slice(12, 28);
+      const data = buf.slice(28);
+      const decipher = crypto.createDecipheriv("aes-256-gcm", key, iv);
+      decipher.setAuthTag(tag);
+      const decrypted = Buffer.concat([decipher.update(data), decipher.final()]);
+      return { plaintext: decrypted.toString("utf8") };
+    } catch {
+      throw new HttpsError("internal", "Dekripsi gagal");
+    }
+  }
+);
+
+// ─── PDF to Word (iLovePDF API) ───────────────────────────────────────────────
+// Setup: firebase functions:secrets:set CLOUDCONVERT_API_KEY
+// Daftar gratis di cloudconvert.com (25 konversi/hari)
+exports.convertPdfToWord = onCall(
+  { secrets: [CLOUDCONVERT_API_KEY], timeoutSeconds: 300, memory: "1GiB" },
+  async (request) => {
+    if (!request.auth) throw new HttpsError("unauthenticated", "Harus login");
+
+    const uid = request.auth.uid;
+    await checkRateLimit(uid, "pdf_convert", 10);
+    const { storagePath } = request.data;
+
+    if (!storagePath || typeof storagePath !== "string") {
+      throw new HttpsError("invalid-argument", "storagePath tidak valid");
+    }
+    if (!storagePath.startsWith(`pdf_temp/${uid}/`)) {
+      throw new HttpsError("permission-denied", "Akses ditolak");
+    }
+
+    const bucket = admin.storage().bucket();
+    const srcFile = bucket.file(storagePath);
+    const [exists] = await srcFile.exists();
+    if (!exists) throw new HttpsError("not-found", "File tidak ditemukan di storage");
+
+    const [metadata] = await srcFile.getMetadata();
+    const fileSizeBytes = parseInt(metadata.size, 10);
+    const MAX_PDF_SIZE = 50 * 1024 * 1024; // 50 MB
+    if (fileSizeBytes > MAX_PDF_SIZE) {
+      throw new HttpsError("invalid-argument", "Ukuran file melebihi batas maksimum (50MB)");
+    }
+    if (metadata.contentType !== "application/pdf") {
+      throw new HttpsError("invalid-argument", "File harus berformat PDF");
+    }
+
+    const [pdfBuffer] = await srcFile.download();
+    const rawFilename = storagePath.split("/").pop();
+    // Sanitasi filename: hanya alfanumerik, spasi, dash, underscore, titik
+    const filename = rawFilename.replace(/^\d+_/, "").replace(/[^a-zA-Z0-9 ._-]/g, "_");
+    const baseName = filename.replace(/\.pdf$/i, "");
+
+    const apiKey = CLOUDCONVERT_API_KEY.value();
+    const CC = "https://api.cloudconvert.com/v2";
+
+    // 1. Buat job CloudConvert: upload → convert → export
+    const jobRes = await fetch(`${CC}/jobs`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        tasks: {
+          "upload-pdf":      { operation: "import/upload" },
+          "convert-to-docx": { operation: "convert", input: "upload-pdf", output_format: "docx" },
+          "export-docx":     { operation: "export/url", input: "convert-to-docx" },
+        },
+      }),
+    });
+    if (!jobRes.ok) {
+      const body = await jobRes.text();
+      console.error("[convertPdfToWord] CloudConvert job error:", jobRes.status, body);
+      throw new HttpsError("internal", "Konversi gagal, coba lagi nanti");
+    }
+    const job = (await jobRes.json()).data;
+    const jobId = job.id;
+    const importTask = job.tasks.find(t => t.name === "upload-pdf");
+    if (!importTask?.result?.form) {
+      throw new HttpsError("internal", "CloudConvert tidak mengembalikan form upload");
+    }
+
+    // 2. Upload PDF ke CloudConvert (S3 presigned form)
+    const { url: uploadUrl, parameters: uploadParams } = importTask.result.form;
+    const uploadForm = new FormData();
+    for (const [k, v] of Object.entries(uploadParams)) uploadForm.append(k, v);
+    // file harus menjadi field TERAKHIR untuk S3
+    uploadForm.append("file", new Blob([pdfBuffer], { type: "application/pdf" }), filename);
+
+    const upRes = await fetch(uploadUrl, { method: "POST", body: uploadForm });
+    if (!upRes.ok && upRes.status !== 204) {
+      const body = await upRes.text();
+      console.error("[convertPdfToWord] upload error:", upRes.status, body);
+      throw new HttpsError("internal", "Upload file gagal, coba lagi nanti");
+    }
+
+    // 3. Polling sampai job selesai (maks 4 menit)
+    let finalJob = null;
+    for (let i = 0; i < 80; i++) {
+      await new Promise(r => setTimeout(r, 3000));
+      const statusRes = await fetch(`${CC}/jobs/${jobId}?include=tasks`, {
+        headers: { Authorization: `Bearer ${apiKey}` },
+      });
+      const statusData = (await statusRes.json()).data;
+      if (statusData.status === "finished") { finalJob = statusData; break; }
+      if (statusData.status === "error") {
+        const errTask = statusData.tasks.find(t => t.status === "error");
+        console.error("[convertPdfToWord] task error:", errTask?.message);
+        throw new HttpsError("internal", "Konversi gagal, coba lagi nanti");
+      }
+    }
+    if (!finalJob) throw new HttpsError("deadline-exceeded", "Konversi timeout, coba lagi");
+
+    // 4. Ambil URL download dari export task
+    const exportTask = finalJob.tasks.find(t => t.name === "export-docx");
+    const downloadUrl = exportTask?.result?.files?.[0]?.url;
+    if (!downloadUrl) throw new HttpsError("internal", "URL download tidak tersedia");
+
+    // 5. Download DOCX
+    const dlRes = await fetch(downloadUrl);
+    if (!dlRes.ok) throw new HttpsError("internal", "Download hasil konversi gagal");
+    const docxBuffer = Buffer.from(await dlRes.arrayBuffer());
+
+    // Simpan ke Firebase Storage
+    const ts = Date.now();
+    const resultPath = `pdf_converted/${uid}/${ts}_${baseName}.docx`;
+    const resultFile = bucket.file(resultPath);
+    await resultFile.save(docxBuffer, {
+      metadata: {
+        contentType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        contentDisposition: `attachment; filename="${baseName}.docx"`,
+      },
+    });
+
+    await srcFile.delete().catch(() => {});
+
+    const [signedUrl] = await resultFile.getSignedUrl({
+      action: "read",
+      expires: Date.now() + 10 * 60 * 1000, // 10 menit — cukup untuk download
+    });
+
+    return { url: signedUrl, filename: `${baseName}.docx` };
+  }
+);
+
+##############################################################
+# 1b. functions/package.json
+##############################################################
+
+{
+  "name": "functions",
+  "description": "Cloud Functions for Firebase",
+  "scripts": {
+    "lint": "echo 'skip lint'",
+    "serve": "firebase emulators:start --only functions",
+    "shell": "firebase functions:shell",
+    "start": "npm run shell",
+    "deploy": "firebase deploy --only functions",
+    "logs": "firebase functions:log"
+  },
+  "engines": {
+    "node": "24"
+  },
+  "main": "index.js",
+  "dependencies": {
+    "@google-cloud/storage": "^5.18.3",
+    "firebase-admin": "^14.1.0",
+    "firebase-functions": "^7.0.0"
+  },
+  "devDependencies": {
+    "eslint": "^8.15.0",
+    "eslint-config-google": "^0.14.0",
+    "firebase-functions-test": "^0.3.3"
+  },
+  "private": true
+}
+
+##############################################################
+# 2. ptadytiapt/index.js
+##############################################################
+
+const { setGlobalOptions } = require("firebase-functions");
+const { onSchedule }      = require("firebase-functions/v2/scheduler");
+const admin               = require("firebase-admin");
+
+setGlobalOptions({ maxInstances: 10 });
+
+// admin.initializeApp() hanya boleh dipanggil sekali per proses.
+// Codebase ini berjalan di container terpisah, jadi panggil di sini.
+if (!admin.apps.length) admin.initializeApp();
+
+// ─── Cleanup temp_files yang sudah expired (jalan tiap jam) ─────────────────
+exports.cleanupTempFiles = onSchedule("every 1 hours", async () => {
+  const db     = admin.firestore();
+  const bucket = admin.storage().bucket();
+  const now    = admin.firestore.Timestamp.now();
+
+  const snap = await db
+    .collection("temp_files")
+    .where("expiresAt", "<=", now)
+    .get();
+
+  if (snap.empty) {
+    console.log("cleanupTempFiles: tidak ada file expired");
+    return;
+  }
+
+  let deleted = 0;
+  for (const docSnap of snap.docs) {
+    const data = docSnap.data();
+    if (data.storagePath && typeof data.storagePath === "string") {
+      // Validasi path sebelum delete — cegah path traversal
+      const safePath = data.storagePath;
+      const isValidPath = !safePath.includes("..") && !safePath.startsWith("/")
+        && !safePath.includes("%") && safePath.startsWith("temp_files/");
+      if (isValidPath) {
+        try { await bucket.file(safePath).delete(); } catch {}
+      }
+    }
+    try { await docSnap.ref.delete(); deleted++; } catch {}
+  }
+  console.log(`cleanupTempFiles: dihapus ${deleted} file`);
+});
+
+##############################################################
+# 3. storage.rules
+##############################################################
+
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    function isLoggedIn() {
+      return request.auth != null;
+    }
+
+    function getUserData() {
+      return firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data;
+    }
+
+    function userExists() {
+      return isLoggedIn()
+        && firestore.exists(/databases/(default)/documents/users/$(request.auth.uid));
+    }
+
+    function isNotDisabled() {
+      return userExists() && getUserData().get('disabled', false) != true;
+    }
+
+    function isActiveUser() {
+      return isLoggedIn() && isNotDisabled();
+    }
+
+    function isOwner(userId) {
+      return isActiveUser() && request.auth.uid == userId;
+    }
+
+    function isEditor() {
+      return isActiveUser()
+        && getUserData().role in ['admin', 'superadmin', 'editor'];
+    }
+
+    function isAdmin() {
+      return isActiveUser()
+        && getUserData().role in ['admin', 'superadmin'];
+    }
+
+    function isFinance() {
+      return isActiveUser()
+        && getUserData().role in ['admin', 'superadmin', 'finance'];
+    }
+
+    function isValidImage() {
+      return request.resource.size < 5 * 1024 * 1024
+        && request.resource.contentType.matches('image/.*');
+    }
+
+    function isValidDoc() {
+      return request.resource.size < 10 * 1024 * 1024
+        && (request.resource.contentType.matches('image/.*')
+            || request.resource.contentType == 'application/pdf');
+    }
+
+    // -------------------------------------------------------------------------
+    // PENGUJIAN — teknisi upload foto ke folder milik sendiri
+    // -------------------------------------------------------------------------
+    match /pengujian/{userId}/{docId}/{allPaths=**} {
+      allow read:  if true;
+      allow write: if (isOwner(userId) || isAdmin())
+        && request.resource.size < 10 * 1024 * 1024
+        && request.resource.contentType.matches('image/.*');
+    }
+
+    // -------------------------------------------------------------------------
+    // INSTANSI — logo & TTD diakses html2canvas saat export PDF (public read)
+    // -------------------------------------------------------------------------
+    match /instansi/{allPaths=**} {
+      allow read:           if true;
+      allow create, update: if isEditor() && isValidImage();
+      allow delete:         if isEditor();
+    }
+
+    // -------------------------------------------------------------------------
+    // LANDING PAGE CMS — slides, services, projects, testimonials
+    // -------------------------------------------------------------------------
+    match /landing/{allPaths=**} {
+      allow read:           if true;
+      allow create, update: if isEditor() && isValidImage();
+      allow delete:         if isEditor();
+    }
+
+    // -------------------------------------------------------------------------
+    // DPP — dokumen checklist & foto submission
+    // -------------------------------------------------------------------------
+    match /dpp/{allPaths=**} {
+      allow read:  if isActiveUser();
+      allow write: if isAdmin() && isValidDoc();
+    }
+
+    // -------------------------------------------------------------------------
+    // DOKUMEN KEUANGAN — hanya admin/finance
+    // -------------------------------------------------------------------------
+    match /dokumen/{allPaths=**} {
+      allow read:  if isActiveUser();
+      allow write: if (isAdmin() || isFinance()) && isValidDoc();
+    }
+
+    // -------------------------------------------------------------------------
+    // LAPORAN TEKNISI — teknisi upload, semua login bisa baca
+    // -------------------------------------------------------------------------
+    match /laporan/{allPaths=**} {
+      allow read:  if isActiveUser();
+      allow write: if isAdmin() && isValidDoc();
+    }
+
+    // -------------------------------------------------------------------------
+    // REKRUTMEN — pelamar upload CV/foto/video tanpa login, maks 50 MB
+    // -------------------------------------------------------------------------
+    match /rekrutmen/{allPaths=**} {
+      allow read:   if isAdmin();
+      allow create: if request.resource.size < 50 * 1024 * 1024
+        && (request.resource.contentType.matches('image/.*')
+            || request.resource.contentType == 'application/pdf'
+            || request.resource.contentType == 'application/msword'
+            || request.resource.contentType == 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+    }
+
+    // -------------------------------------------------------------------------
+    // DOWNLOADS — APK & file distribusi, hanya admin yang bisa upload
+    // -------------------------------------------------------------------------
+    match /downloads/{allPaths=**} {
+      allow read:   if true;
+      allow create, update: if isAdmin()
+        && request.resource.size < 200 * 1024 * 1024
+        && (request.resource.contentType == 'application/vnd.android.package-archive'
+            || request.resource.contentType == 'application/zip'
+            || request.resource.contentType == 'application/pdf');
+      allow delete: if isAdmin();
+    }
+
+    // -------------------------------------------------------------------------
+    // NIDI DATA — sertifikat NIDI & SLO, hanya admin yang bisa upload
+    // -------------------------------------------------------------------------
+    match /nidi_data/{allPaths=**} {
+      allow read:  if isActiveUser();
+      allow write: if isAdmin() && isValidDoc();
+    }
+
+    // -------------------------------------------------------------------------
+    // PEKERJAAN RLO — foto megger, hanya admin
+    // -------------------------------------------------------------------------
+    match /pekerjaan/{allPaths=**} {
+      allow read:  if isActiveUser();
+      allow write: if isAdmin() && isValidImage();
+    }
+
+    // -------------------------------------------------------------------------
+    // LEMBAGA LIT — logo, TTD, stempel, hanya admin
+    // -------------------------------------------------------------------------
+    match /lembaga_lit/{allPaths=**} {
+      allow read:  if true;
+      allow write: if isAdmin() && isValidImage();
+    }
+
+    // -------------------------------------------------------------------------
+    // TEMP FILES — file sementara 24 jam, hanya superadmin bisa upload & hapus
+    // read public agar URL download bisa diakses tanpa auth (share link)
+    // -------------------------------------------------------------------------
+    function isSuperAdmin() {
+      return isActiveUser() && getUserData().role == 'superadmin';
+    }
+
+    match /temp_files/{userId}/{fileId}/{fileName} {
+      allow read:   if true;
+      allow create: if isSuperAdmin()
+                      && request.auth.uid == userId
+                      && request.resource.size < 200 * 1024 * 1024
+                      && (request.resource.contentType == 'application/pdf'
+                          || request.resource.contentType.matches('image/.*')
+                          || request.resource.contentType == 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+                          || request.resource.contentType == 'application/zip');
+      allow delete: if isSuperAdmin();
+    }
+
+    // -------------------------------------------------------------------------
+    // INVENTORI — foto barang, admin upload & read
+    // -------------------------------------------------------------------------
+    match /inventori/{allPaths=**} {
+      allow read:  if isActiveUser();
+      allow write: if isAdmin() && isValidImage();
+    }
+
+    // -------------------------------------------------------------------------
+    // ALAT KERJA — foto alat, admin upload & read
+    // -------------------------------------------------------------------------
+    match /alatKerja/{allPaths=**} {
+      allow read:  if isActiveUser();
+      allow write: if isAdmin() && isValidImage();
+    }
+
+    // -------------------------------------------------------------------------
+    // PDF CONVERTER — upload temp & hasil konversi (per-user, maks 15 MB)
+    // pdf_temp: ditulis user, dihapus oleh Cloud Function setelah konversi
+    // pdf_converted: ditulis oleh Cloud Function (admin SDK, bypass rules)
+    // -------------------------------------------------------------------------
+    match /pdf_temp/{userId}/{fileName} {
+      allow create: if isOwner(userId)
+                      && request.resource.size < 30 * 1024 * 1024
+                      && request.resource.contentType == 'application/pdf';
+      allow delete: if isOwner(userId) || isAdmin();
+      allow read:   if isOwner(userId) || isAdmin();
+    }
+
+    match /pdf_converted/{userId}/{fileName} {
+      allow read:   if isOwner(userId) || isAdmin();
+      allow delete: if isOwner(userId) || isAdmin();
+    }
+
+    // -------------------------------------------------------------------------
+    // DEFAULT DENY — semua path lain ditolak
+    // -------------------------------------------------------------------------
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+
+  }
+}
+
+##############################################################
+# 4. src/firebase/config.js
+##############################################################
+
+import { initializeApp } from "firebase/app";
+import {
+  initializeFirestore,
+  persistentLocalCache,
+  persistentMultipleTabManager,
+  persistentSingleTabManager,
+} from "firebase/firestore";
+import { getDatabase } from "firebase/database";
+import {
+  initializeAuth,
+  browserLocalPersistence,
+  browserPopupRedirectResolver,
+} from "firebase/auth";
+import { getStorage } from "firebase/storage";
+import { Capacitor } from "@capacitor/core";
+
+const isNative = Capacitor.isNativePlatform();
+
+export const firebaseConfig = {
+  apiKey:            import.meta.env.VITE_FIREBASE_API_KEY,
+  authDomain:        import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+  databaseURL:       import.meta.env.VITE_FIREBASE_DATABASE_URL,
+  projectId:         import.meta.env.VITE_FIREBASE_PROJECT_ID,
+  storageBucket:     import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+  appId:             import.meta.env.VITE_FIREBASE_APP_ID,
+};
+
+const app = initializeApp(firebaseConfig);
+
+export { app };
+
+// Firestore — pakai singleTab di native (BroadcastChannel tidak tersedia di WebView)
+export const db = initializeFirestore(app, {
+  localCache: persistentLocalCache({
+    tabManager: isNative ? persistentSingleTabManager() : persistentMultipleTabManager(),
+  }),
+});
+
+export const db2 = getDatabase(app);
+
+// Auth — jangan pakai popupRedirectResolver di native (tidak dibutuhkan)
+export const auth = isNative
+  ? initializeAuth(app, { persistence: browserLocalPersistence })
+  : initializeAuth(app, {
+      persistence: browserLocalPersistence,
+      popupRedirectResolver: browserPopupRedirectResolver,
+    });
+
+export const storage = getStorage(app);
+
+##############################################################
+# 5. firebase.json
+##############################################################
+
+{
+  "functions": [
+    {
+      "source": "functions",
+      "codebase": "default",
+      "ignore": [
+        "node_modules",
+        ".git",
+        "firebase-debug.log",
+        "firebase-debug.*.log",
+        "*.local"
+      ]
+    },
+    {
+      "source": "ptadytiapt",
+      "codebase": "ptadytiapt",
+      "ignore": [
+        "node_modules",
+        ".git",
+        "firebase-debug.log",
+        "firebase-debug.*.log",
+        "*.local"
+      ]
+    }
+  ],
+
+  "database": [
+    {
+      "rules": "database.rules.json",
+      "target": "adytia-pt-default-rtdb"
+    }
+  ],
+
+  "firestore": {
+    "rules": "firestore.rules",
+    "indexes": "firestore.indexes.json"
+  },
+
+  "storage": {
+    "rules": "storage.rules"
+  },
+
+  "hosting": {
+    "public": "dist",
+    "ignore": [
+      "firebase.json",
+      "**/.*",
+      "**/node_modules/**"
+    ],
+
+    "rewrites": [
+      {
+        "source": "**",
+        "destination": "/index.html"
+      }
+    ],
+
+    "headers": [
+      {
+        "source": "**",
+        "headers": [
+          {
+            "key": "X-Content-Type-Options",
+            "value": "nosniff"
+          },
+          {
+            "key": "X-Frame-Options",
+            "value": "SAMEORIGIN"
+          },
+          {
+            "key": "X-XSS-Protection",
+            "value": "1; mode=block"
+          },
+          {
+            "key": "Referrer-Policy",
+            "value": "strict-origin-when-cross-origin"
+          },
+          {
+            "key": "Permissions-Policy",
+            "value": "camera=(self), microphone=(), geolocation=(self)"
+          },
+          {
+            "key": "Strict-Transport-Security",
+            "value": "max-age=31536000; includeSubDomains"
+          },
+          {
+            "key": "Content-Security-Policy",
+            "value": "default-src 'self'; script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://apis.google.com https://www.gstatic.com https://www.googletagmanager.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https://*.googleapis.com https://*.gstatic.com https://firebasestorage.googleapis.com https://*.firebasestorage.app https://lh3.googleusercontent.com; connect-src 'self' https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com https://firebasestorage.googleapis.com https://*.firebasestorage.app https://identitytoolkit.googleapis.com https://nominatim.openstreetmap.org https://ip-api.com; worker-src 'self' blob:; frame-src https://adytia-pt.firebaseapp.com https://accounts.google.com; object-src 'none'; base-uri 'self'; form-action 'self'"
+          },
+          {
+            "key": "Cross-Origin-Opener-Policy",
+            "value": "same-origin-allow-popups"
+          }
+        ]
+      }
+    ]
+  }
+}
+
+##############################################################
+# 6. Hasil grep di src/ untuk: firebase/storage, getDownloadURL,
+#    uploadBytes, getStorage  (path:baris:isi)
+##############################################################
+
+src\firebase\config.js:14:import { getStorage } from "firebase/storage";
+src\firebase\config.js:50:export const storage = getStorage(app);
+
+src\pages\admin\AkomKasbon.jsx:5:import { ref as storageRef, uploadBytes, getDownloadURL } from "firebase/storage";
+src\pages\admin\AkomKasbon.jsx:323:        const snap = await uploadBytes(storageRef(storage, path), foto);
+src\pages\admin\AkomKasbon.jsx:324:        buktiUrl = await getDownloadURL(snap.ref);
+
+src\offline\syncEngine.js:5:import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
+src\offline\syncEngine.js:189:      await uploadBytes(storageRef, blob);
+src\offline\syncEngine.js:190:      const url = await getDownloadURL(storageRef);
+
+src\pages\admin\LaikOperasiEditor.jsx:166:  const getStorageDocId = async (currentForm) => {
+src\pages\admin\LaikOperasiEditor.jsx:179:      const useId = await getStorageDocId(form);
+  (NOTE: ini bukan Firebase Storage — nama fungsi lokal "getStorageDocId"
+   kebetulan mengandung kata "getStorage", false positive dari grep)
+
+src\pages\admin\LembagaLIT.jsx:5:import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
+src\pages\admin\LembagaLIT.jsx:15:  await uploadBytes(storageRef, file);
+src\pages\admin\LembagaLIT.jsx:16:  return getDownloadURL(storageRef);
+
+src\services\contentService.js:22:    uploadBytes,
+src\services\contentService.js:23:    getDownloadURL,
+src\services\contentService.js:25:} from 'firebase/storage';
+src\services\contentService.js:58:    await uploadBytes(ref, compressed);
+src\services\contentService.js:59:    const url = await getDownloadURL(ref);
+src\services\contentService.js:361:    await uploadBytes(ref, compressed);
+src\services\contentService.js:362:    const url = await getDownloadURL(ref);
+
+src\pages\admin\PekerjaanRLO.jsx:6:import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
+src\pages\admin\PekerjaanRLO.jsx:73:  await uploadBytes(storageRef, compressed);
+src\pages\admin\PekerjaanRLO.jsx:74:  return getDownloadURL(storageRef);
+
+src\services\asetService.js:6:import { ref, uploadBytes, getDownloadURL, deleteObject } from "firebase/storage";
+src\services\asetService.js:75:  await uploadBytes(r, compressed);
+src\services\asetService.js:76:  const url = await getDownloadURL(r);
+src\services\asetService.js:83:  await uploadBytes(r, compressed);
+src\services\asetService.js:84:  const url = await getDownloadURL(r);
+
+src\pages\admin\PengujianAdminDetail.jsx:5:import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
+src\pages\admin\PengujianAdminDetail.jsx:197:      await uploadBytes(storageRef, compressed);
+src\pages\admin\PengujianAdminDetail.jsx:198:      const url = await getDownloadURL(storageRef);
+src\pages\admin\PengujianAdminDetail.jsx:255:      await uploadBytes(storageRef, blob);
+src\pages\admin\PengujianAdminDetail.jsx:256:      const newUrl = await getDownloadURL(storageRef);
+src\pages\admin\PengujianAdminDetail.jsx:348:      await uploadBytes(storageRef, compressed);
+src\pages\admin\PengujianAdminDetail.jsx:349:      const url = await getDownloadURL(storageRef);
+
+src\services\dppService.js:7:  ref, uploadBytes, getDownloadURL, deleteObject,
+src\services\dppService.js:8:} from "firebase/storage";
+src\services\dppService.js:138:  await uploadBytes(r, file);
+src\services\dppService.js:139:  const url = await getDownloadURL(r);
+
+src\services\dokumenService.js:7:  ref, uploadBytesResumable, getDownloadURL, deleteObject,
+src\services\dokumenService.js:8:} from "firebase/storage";
+src\services\dokumenService.js:51:    const task = uploadBytesResumable(storageRef, file);
+src\services\dokumenService.js:57:        const url = await getDownloadURL(task.snapshot.ref);
+
+src\pages\admin\WoPenyelesaian.jsx:5:import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
+src\pages\admin\WoPenyelesaian.jsx:103:      await uploadBytes(nidiRef, pdfNidi);
+src\pages\admin\WoPenyelesaian.jsx:104:      await uploadBytes(sloRef, pdfSlo);
+src\pages\admin\WoPenyelesaian.jsx:106:        getDownloadURL(nidiRef),
+src\pages\admin\WoPenyelesaian.jsx:107:        getDownloadURL(sloRef),
+
+src\pages\admin\SettingsPanel.jsx:6:import { ref as storageRef, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
+src\pages\admin\SettingsPanel.jsx:189:    const task = uploadBytesResumable(ref, file, {
+
+src\services\inventoriService.js:6:import { ref, uploadBytes, getDownloadURL, deleteObject } from "firebase/storage";
+src\services\inventoriService.js:69:  await uploadBytes(r, compressed);
+src\services\inventoriService.js:70:  const url = await getDownloadURL(r);
+
+src\services\instansiService.js:6:import { ref, uploadBytes, getDownloadURL, deleteObject } from "firebase/storage";
+src\services\instansiService.js:72:  await uploadBytes(r, compressed);
+src\services\instansiService.js:73:  const url = await getDownloadURL(r);
+
+src\services\maintenanceGarduService.js:6:import { ref, uploadBytes, getDownloadURL, deleteObject } from "firebase/storage";
+src\services\maintenanceGarduService.js:46:  await uploadBytes(storageRef, compressed);
+src\services\maintenanceGarduService.js:47:  const url = await getDownloadURL(storageRef);
+
+src\pages\mobile\MobileAkomodasi.jsx:6:import { ref as storageRef, uploadBytes, getDownloadURL } from "firebase/storage";
+src\pages\mobile\MobileAkomodasi.jsx:106:        const snap = await uploadBytes(storageRef(storage, path), foto);
+src\pages\mobile\MobileAkomodasi.jsx:107:        buktiUrl = await getDownloadURL(snap.ref);
+
+src\services\laikOperasiService.js:18:import { ref, uploadBytes, getDownloadURL, deleteObject } from "firebase/storage";
+src\services\laikOperasiService.js:64:  await uploadBytes(r, compressed);
+src\services\laikOperasiService.js:65:  const url = await getDownloadURL(r);
+
+src\pages\mobile\MobileFormPengujian.jsx:5:import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
+src\pages\mobile\MobileFormPengujian.jsx:223:        await uploadBytes(storageRef, compressed);
+src\pages\mobile\MobileFormPengujian.jsx:224:        const url = await getDownloadURL(storageRef);
+src\pages\mobile\MobileFormPengujian.jsx:283:      await uploadBytes(storageRef, compressed);
+src\pages\mobile\MobileFormPengujian.jsx:284:      const url = await getDownloadURL(storageRef);
+
+src\pages\mobile\MobileFileShare.jsx:10:  ref, uploadBytesResumable, getDownloadURL, deleteObject,
+src\pages\mobile\MobileFileShare.jsx:11:} from "firebase/storage";
+src\pages\mobile\MobileFileShare.jsx:171:      const task = uploadBytesResumable(storageRef, file, metadata);
+src\pages\mobile\MobileFileShare.jsx:179:      const fileUrl  = await getDownloadURL(storageRef);
+
+src\pages\mobile\MobileLaporan.jsx:15: getStorage,
+src\pages\mobile\MobileLaporan.jsx:17: uploadBytes,
+src\pages\mobile\MobileLaporan.jsx:18: getDownloadURL
+src\pages\mobile\MobileLaporan.jsx:19:} from "firebase/storage";
+src\pages\mobile\MobileLaporan.jsx:89:  const storage = getStorage();
+src\pages\mobile\MobileLaporan.jsx:95:  await uploadBytes(storageRef, file);
+src\pages\mobile\MobileLaporan.jsx:97:  return await getDownloadURL(storageRef);
+  (NOTE: satu-satunya file yang panggil getStorage() sendiri secara lokal,
+   bukan import instance `storage` dari src/firebase/config.js)
+
+src\pages\page-umum\FormLamaran.jsx:5:import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
+src\pages\page-umum\FormLamaran.jsx:217:            await uploadBytes(storageRef, file);
+src\pages\page-umum\FormLamaran.jsx:218:            const url = await getDownloadURL(storageRef);
