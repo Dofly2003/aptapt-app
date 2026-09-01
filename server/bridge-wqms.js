@@ -136,13 +136,19 @@ client.on("message", async (topic, message) => {
     return; // stasiun tidak diizinkan — diam saja
   }
 
+  // Hanya payload yang benar-benar dari stasiun kualitas air (broker dipakai
+  // bareng AWLR/level air yg kadang kirim ph:"0" sebagai placeholder).
+  if (String(d._groupName || "").toUpperCase() !== "WQMS") {
+    return; // bukan stasiun WQMS — diam saja
+  }
+
   const deviceId = sanitizeKey(STATION_MAP[idStation] || idStation);
   const ts = Date.now();
   const { date, time } = resolveTime(d._terminalTime);
   const base = `monitoring/kualitas-air/${deviceId}`;
   const m = mapPayload(d);
 
-  // Tolak payload non-WQMS (mis. AWLR yang cuma kirim suhu) — semua parameter kosong.
+  // Backstop: minimal satu parameter kualitas air terisi.
   if ([m.ph, m.do, m.conductivity, m.turbidity].every((v) => v == null)) {
     console.log(`[SKIP] ${idStation}: tanpa parameter kualitas air`);
     return;
