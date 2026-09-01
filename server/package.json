@@ -6,7 +6,7 @@
   "main": "index.js",
   "scripts": {
     "start": "node index.js",
-    "bridge:ketinggian": "node bridge-ketinggian.js"
+    "bridge:wqms": "node bridge-wqms.js"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.658.0",

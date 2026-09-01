@@ -8,6 +8,7 @@ const DEVICES = "monitoring/devices";
 export const DEVICE_TYPES = [
   { value: "panel-daya", label: "Panel Daya (listrik R-S-T)" },
   { value: "ketinggian", label: "Ketinggian / Level" },
+  { value: "kualitas-air", label: "Kualitas Air (WQMS)" },
 ];
 
 /** Realtime listener daftar device. cb menerima array [{id, ...}]. Return unsub. */
@@ -55,7 +56,7 @@ export async function deleteDevice(id) {
 
 /** Path data default untuk sebuah device (kalau field dataPath dikosongkan). */
 export function defaultDataPath(type, id) {
-  return type === "ketinggian"
-    ? `monitoring/ketinggian/${id}`
-    : `monitoring/panel-daya/${id}/log`;
+  if (type === "ketinggian") return `monitoring/ketinggian/${id}`;
+  if (type === "kualitas-air") return `monitoring/kualitas-air/${id}`;
+  return `monitoring/panel-daya/${id}/log`;
 }

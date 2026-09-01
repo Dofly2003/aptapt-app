@@ -12,7 +12,7 @@
         ".write": "auth != null && (root.child('users').child(auth.uid).child('role').val() == 'admin' || root.child('users').child(auth.uid).child('role').val() == 'superadmin')",
         "$deviceId": {
           ".validate": "newData.hasChildren(['name', 'type'])",
-          "type": { ".validate": "newData.val() == 'panel-daya' || newData.val() == 'ketinggian'" }
+          "type": { ".validate": "newData.val() == 'panel-daya' || newData.val() == 'ketinggian' || newData.val() == 'kualitas-air'" }
         }
       },
 
@@ -20,6 +20,9 @@
         "$deviceId": { ".write": false }
       },
       "ketinggian": {
+        "$deviceId": { ".write": false }
+      },
+      "kualitas-air": {
         "$deviceId": { ".write": false }
       }
     },

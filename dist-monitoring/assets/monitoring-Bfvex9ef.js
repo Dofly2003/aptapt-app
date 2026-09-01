@@ -23579,6 +23579,9 @@ class View {
 function viewGetServerCache(view) {
   return view.viewCache_.serverCache.getNode();
 }
+function viewGetCompleteNode(view) {
+  return viewCacheGetCompleteEventSnap(view.viewCache_);
+}
 function viewGetCompleteServerCache(view, path) {
   const cache = viewCacheGetCompleteServerSnap(view.viewCache_);
   if (cache) {
@@ -23979,6 +23982,26 @@ function syncTreeCalcCompleteEventCache(syncTree, path, writeIdsToExclude) {
     }
   });
   return writeTreeCalcCompleteEventCache(writeTree, path, serverCache, writeIdsToExclude, includeHiddenSets);
+}
+function syncTreeGetServerValue(syncTree, query2) {
+  const path = query2._path;
+  let serverCache = null;
+  syncTree.syncPointTree_.foreachOnPath(path, (pathToSyncPoint, sp) => {
+    const relativePath = newRelativePath(pathToSyncPoint, path);
+    serverCache = serverCache || syncPointGetCompleteServerCache(sp, relativePath);
+  });
+  let syncPoint = syncTree.syncPointTree_.get(path);
+  if (!syncPoint) {
+    syncPoint = new SyncPoint();
+    syncTree.syncPointTree_ = syncTree.syncPointTree_.set(path, syncPoint);
+  } else {
+    serverCache = serverCache || syncPointGetCompleteServerCache(syncPoint, newEmptyPath());
+  }
+  const serverCacheComplete = serverCache != null;
+  const serverCacheNode = serverCacheComplete ? new CacheNode(serverCache, true, false) : null;
+  const writesCache = writeTreeChildWrites(syncTree.pendingWriteTree_, query2._path);
+  const view = syncPointGetView(syncPoint, query2, writesCache, serverCacheComplete ? serverCacheNode.getNode() : ChildrenNode.EMPTY_NODE, serverCacheComplete);
+  return viewGetCompleteNode(view);
 }
 function syncTreeApplyOperationToSyncPoints_(syncTree, operation) {
   return syncTreeApplyOperationHelper_(
@@ -24619,6 +24642,29 @@ function repoUpdateInfo(repo, pathString, value) {
 }
 function repoGetNextWriteId(repo) {
   return repo.nextWriteId_++;
+}
+function repoGetValue(repo, query2, eventRegistration) {
+  const cached = syncTreeGetServerValue(repo.serverSyncTree_, query2);
+  if (cached != null) {
+    return Promise.resolve(cached);
+  }
+  return repo.server_.get(query2).then((payload) => {
+    const node = nodeFromJSON(payload).withIndex(query2._queryParams.getIndex());
+    syncTreeAddEventRegistration(repo.serverSyncTree_, query2, eventRegistration, true);
+    let events;
+    if (query2._queryParams.loadsAllData()) {
+      events = syncTreeApplyServerOverwrite(repo.serverSyncTree_, query2._path, node);
+    } else {
+      const tag = syncTreeTagForQuery(repo.serverSyncTree_, query2);
+      events = syncTreeApplyTaggedQueryOverwrite(repo.serverSyncTree_, query2._path, node, tag);
+    }
+    eventQueueRaiseEventsForChangedPath(repo.eventQueue_, query2._path, events);
+    syncTreeRemoveEventRegistration(repo.serverSyncTree_, query2, eventRegistration, null, true);
+    return node;
+  }, (err) => {
+    repoLog(repo, "get for query " + stringify(query2) + " failed: " + err);
+    return Promise.reject(new Error(err));
+  });
 }
 function repoRunOnDisconnectEvents(repo) {
   repoLog(repo, "onDisconnectEvents");
@@ -25338,6 +25384,15 @@ function child(parent, path) {
     validatePathString("child", "path", path);
   }
   return new ReferenceImpl(parent._repo, pathChild(parent._path, path));
+}
+function get$4(query2) {
+  query2 = getModularInstance(query2);
+  const callbackContext = new CallbackContext(() => {
+  });
+  const container = new ValueEventRegistration(callbackContext);
+  return repoGetValue(query2._repo, query2, container).then((node) => {
+    return new DataSnapshot(node, new ReferenceImpl(query2._repo, query2._path), query2._queryParams.getIndex());
+  });
 }
 class ValueEventRegistration {
   constructor(callbackContext) {
@@ -50148,6 +50203,217 @@ function Ketinggian() {
     ] })
   ] });
 }
+const PARAMS = [
+  { key: "ph", label: "pH", unit: "", color: "#22c55e", dp: 2 },
+  { key: "do", label: "DO", unit: "mg/L", color: "#38bdf8", dp: 2 },
+  { key: "conductivity", label: "Konduktivitas", unit: "mS/cm", color: "#f59e0b", dp: 3 },
+  { key: "turbidity", label: "Kekeruhan", unit: "NTU", color: "#a855f7", dp: 2 },
+  { key: "temp", label: "Suhu", unit: "°C", color: "#ef4444", dp: 1 }
+];
+const TABLE_DAYS = 10;
+const HOURS = Array.from({ length: 24 }, (_, i) => String(i).padStart(2, "0"));
+function shiftDate(str, n) {
+  const [y2, m, d] = str.split("-").map(Number);
+  const dt = new Date(y2, m - 1, d + n);
+  return todayStr(dt);
+}
+function KualitasAir() {
+  const { devices, loading } = useDevices("kualitas-air");
+  const [deviceId, setDeviceId] = reactExports.useState("");
+  const [date2, setDate] = reactExports.useState(todayStr());
+  const [param, setParam] = reactExports.useState("ph");
+  const [live, setLive] = reactExports.useState(null);
+  const [rows, setRows] = reactExports.useState([]);
+  const [grid, setGrid] = reactExports.useState({});
+  const device = devices.find((d) => d.id === deviceId) || devices[0];
+  const P2 = PARAMS.find((p) => p.key === param);
+  const fmt = (v) => v == null || Number.isNaN(v) ? "–" : Number(v).toFixed(P2.dp);
+  reactExports.useEffect(() => {
+    if (!deviceId && devices.length) setDeviceId(devices[0].id);
+  }, [devices, deviceId]);
+  const basePath = device ? device.dataPath || `monitoring/kualitas-air/${device.id}` : null;
+  reactExports.useEffect(() => {
+    if (!basePath) return;
+    return subscribe(`${basePath}/live`, setLive);
+  }, [basePath]);
+  reactExports.useEffect(() => {
+    if (!basePath) return;
+    return subscribe(`${basePath}/log/${date2}`, (val) => {
+      setRows(
+        logToRows(val, (e, time2) => ({
+          time: time2.slice(0, 5),
+          ph: e.ph ?? null,
+          do: e.do ?? null,
+          conductivity: e.conductivity ?? null,
+          turbidity: e.turbidity ?? null,
+          temp: e.temp ?? null
+        }))
+      );
+    });
+  }, [basePath, date2]);
+  reactExports.useEffect(() => {
+    if (!basePath) return;
+    let cancelled2 = false;
+    const days2 = Array.from({ length: TABLE_DAYS }, (_, i) => shiftDate(date2, -(TABLE_DAYS - 1 - i)));
+    Promise.all(
+      days2.map(
+        (d) => get$4(ref(rtdb, `${basePath}/log/${d}`)).then((s2) => [d, s2.exists() ? s2.val() : null]).catch(() => [d, null])
+      )
+    ).then((pairs) => {
+      if (cancelled2) return;
+      const g = {};
+      for (const [d, node] of pairs) {
+        g[d] = logToRows(node, (e, time2) => ({
+          time: time2.slice(0, 5),
+          ph: e.ph ?? null,
+          do: e.do ?? null,
+          conductivity: e.conductivity ?? null,
+          turbidity: e.turbidity ?? null,
+          temp: e.temp ?? null
+        }));
+      }
+      setGrid(g);
+    });
+    return () => {
+      cancelled2 = true;
+    };
+  }, [basePath, date2]);
+  const dayVals = reactExports.useMemo(
+    () => rows.map((r2) => r2[param]).filter((v) => v != null && !Number.isNaN(v)),
+    [rows, param]
+  );
+  const high = dayVals.length ? Math.max(...dayVals) : null;
+  const low = dayVals.length ? Math.min(...dayVals) : null;
+  const periodAvg = reactExports.useMemo(() => {
+    const all = [];
+    for (const d of Object.keys(grid))
+      for (const r2 of grid[d]) if (r2[param] != null && !Number.isNaN(r2[param])) all.push(r2[param]);
+    return all.length ? all.reduce((a2, b) => a2 + b, 0) / all.length : null;
+  }, [grid, param]);
+  const current2 = live?.[param] ?? null;
+  const days = Array.from({ length: TABLE_DAYS }, (_, i) => shiftDate(date2, -(TABLE_DAYS - 1 - i)));
+  const cell = (d, hh) => {
+    const list = (grid[d] || []).filter((r2) => r2.time.startsWith(hh));
+    if (!list.length) return { t: "--:--", v: "-" };
+    const last = list[list.length - 1];
+    return { t: last.time, v: last[param] == null ? "-" : Number(last[param]).toFixed(P2.dp) };
+  };
+  if (loading) return /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-slate-400", children: "Memuat device…" });
+  if (!device)
+    return /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-slate-400", children: "Belum ada device kualitas air. Tambahkan di panel admin (jenis: Kualitas Air)." });
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsx(DevicePicker, { devices, deviceId: device.id, onDevice: setDeviceId, date: date2, onDate: setDate }),
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-2 mb-4", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsx(
+        "button",
+        {
+          onClick: () => setDate(shiftDate(date2, -1)),
+          className: "px-3 py-1.5 rounded-lg bg-slate-800 border border-slate-700 text-sm hover:bg-slate-700",
+          children: "◀ Prev"
+        }
+      ),
+      /* @__PURE__ */ jsxRuntimeExports.jsx(
+        "button",
+        {
+          onClick: () => setDate(shiftDate(date2, 1)),
+          disabled: date2 >= todayStr(),
+          className: "px-3 py-1.5 rounded-lg bg-slate-800 border border-slate-700 text-sm hover:bg-slate-700 disabled:opacity-40",
+          children: "Next ▶"
+        }
+      ),
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "text-xs text-slate-500 ml-2", children: [
+        device.name,
+        device.location ? ` — ${device.location}` : ""
+      ] })
+    ] }),
+    /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex flex-wrap gap-1.5 mb-5", children: PARAMS.map((p) => /* @__PURE__ */ jsxRuntimeExports.jsx(
+      "button",
+      {
+        onClick: () => setParam(p.key),
+        className: `px-3 py-1.5 rounded-lg text-sm font-semibold transition border ${param === p.key ? "bg-yellow-400 text-slate-900 border-yellow-400" : "bg-slate-800 text-slate-300 border-slate-700 hover:bg-slate-700"}`,
+        children: p.label
+      },
+      p.key
+    )) }),
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "grid grid-cols-1 lg:grid-cols-[300px_1fr] gap-5 mb-6", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "rounded-2xl overflow-hidden border border-slate-700 bg-slate-900", children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "bg-slate-950 text-center text-xs text-slate-400 py-1.5", children: [
+          "Update terakhir: ",
+          live?.terminalTime || (live?.ts ? new Date(live.ts).toLocaleString("id-ID") : "—")
+        ] }),
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "bg-blue-600 text-white text-center font-semibold py-1.5 text-sm", children: [
+          "Tertinggi: ",
+          fmt(high),
+          " ",
+          P2.unit
+        ] }),
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "bg-black text-center py-6", children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-5xl font-bold text-green-400", children: fmt(current2) }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-lg text-green-500 ml-2", children: P2.unit })
+        ] }),
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "bg-red-600 text-white text-center font-semibold py-1.5 text-sm", children: [
+          "Terendah: ",
+          fmt(low),
+          " ",
+          P2.unit
+        ] }),
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "px-4 py-3 text-xs", children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsxs("p", { className: "text-emerald-400 font-semibold", children: [
+            "STATISTIK PERIODE (",
+            TABLE_DAYS,
+            " HARI)"
+          ] }),
+          /* @__PURE__ */ jsxRuntimeExports.jsxs("p", { className: "text-slate-300 flex justify-between mt-1", children: [
+            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "Rata-rata:" }),
+            /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "font-semibold", children: [
+              fmt(periodAvg),
+              " ",
+              P2.unit
+            ] })
+          ] }),
+          live?.vcc != null && /* @__PURE__ */ jsxRuntimeExports.jsxs("p", { className: "text-slate-400 flex justify-between mt-1", children: [
+            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "Suplai:" }),
+            /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { children: [
+              Number(live.vcc).toFixed(1),
+              " V"
+            ] })
+          ] })
+        ] })
+      ] }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx(
+        TimeChart,
+        {
+          title: `DATA ${P2.label.toUpperCase()} — ${device.name} (${date2})`,
+          data: rows.filter((r2) => r2[param] != null),
+          series: [{ key: param, name: P2.label, color: P2.color }]
+        }
+      )
+    ] }),
+    /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "bg-slate-900 border border-slate-800 rounded-xl overflow-x-auto", children: /* @__PURE__ */ jsxRuntimeExports.jsxs("table", { className: "text-xs w-full border-collapse", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("thead", { children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("tr", { className: "bg-slate-800 text-slate-300", children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx("th", { rowSpan: 2, className: "px-2 py-1 sticky left-0 bg-slate-800 border border-slate-700", children: "JAM" }),
+          days.map((d) => /* @__PURE__ */ jsxRuntimeExports.jsx("th", { colSpan: 2, className: "px-2 py-1 border border-slate-700 whitespace-nowrap", children: d }, d))
+        ] }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("tr", { className: "bg-slate-800/70 text-slate-400", children: days.map((d) => /* @__PURE__ */ jsxRuntimeExports.jsxs(reactExports.Fragment, { children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx("th", { className: "px-2 py-0.5 border border-slate-700 font-medium", children: "WAKTU" }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("th", { className: "px-2 py-0.5 border border-slate-700 font-medium", children: P2.label.toUpperCase() })
+        ] }, `h-${d}`)) })
+      ] }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx("tbody", { children: HOURS.map((hh) => /* @__PURE__ */ jsxRuntimeExports.jsxs("tr", { className: "odd:bg-slate-900 even:bg-slate-950/40", children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx("td", { className: "px-2 py-0.5 text-center font-semibold sticky left-0 bg-inherit border border-slate-800", children: hh }),
+        days.map((d) => {
+          const c2 = cell(d, hh);
+          return /* @__PURE__ */ jsxRuntimeExports.jsxs(reactExports.Fragment, { children: [
+            /* @__PURE__ */ jsxRuntimeExports.jsx("td", { className: "px-2 py-0.5 text-center text-slate-400 border border-slate-800", children: c2.t }),
+            /* @__PURE__ */ jsxRuntimeExports.jsx("td", { className: "px-2 py-0.5 text-center border border-slate-800", children: c2.v })
+          ] }, `${d}-${hh}`);
+        })
+      ] }, hh)) })
+    ] }) }),
+    /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-[11px] text-slate-600 mt-3", children: "Satuan parameter masih asumsi (pH tanpa satuan, DO mg/L, Konduktivitas mS/cm, Kekeruhan NTU, Suhu °C) — sesuaikan bila perlu." })
+  ] });
+}
 function Shell({ children }) {
   const tab = ({ isActive }) => `px-4 py-2 rounded-lg text-sm font-semibold transition ${isActive ? "bg-yellow-400 text-slate-900" : "text-slate-300 hover:bg-slate-800"}`;
   return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "min-h-screen bg-slate-900 text-white", children: [
@@ -50155,7 +50421,8 @@ function Shell({ children }) {
       /* @__PURE__ */ jsxRuntimeExports.jsx("a", { href: "https://pt-adytia.com", className: "font-bold text-yellow-400 whitespace-nowrap", children: "PT. Adytia Putra Teknik" }),
       /* @__PURE__ */ jsxRuntimeExports.jsxs("nav", { className: "flex gap-1", children: [
         /* @__PURE__ */ jsxRuntimeExports.jsx(NavLink, { to: "/panel-daya", className: tab, children: "Panel Daya" }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx(NavLink, { to: "/ketinggian", className: tab, children: "Ketinggian" })
+        /* @__PURE__ */ jsxRuntimeExports.jsx(NavLink, { to: "/ketinggian", className: tab, children: "Ketinggian" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx(NavLink, { to: "/kualitas-air", className: tab, children: "Kualitas Air" })
       ] })
     ] }) }),
     /* @__PURE__ */ jsxRuntimeExports.jsx("main", { className: "max-w-6xl mx-auto px-4 py-6", children })
@@ -50166,6 +50433,7 @@ function App() {
     /* @__PURE__ */ jsxRuntimeExports.jsx(Route, { path: "/", element: /* @__PURE__ */ jsxRuntimeExports.jsx(Navigate, { to: "/panel-daya", replace: true }) }),
     /* @__PURE__ */ jsxRuntimeExports.jsx(Route, { path: "/panel-daya", element: /* @__PURE__ */ jsxRuntimeExports.jsx(PanelDaya, {}) }),
     /* @__PURE__ */ jsxRuntimeExports.jsx(Route, { path: "/ketinggian", element: /* @__PURE__ */ jsxRuntimeExports.jsx(Ketinggian, {}) }),
+    /* @__PURE__ */ jsxRuntimeExports.jsx(Route, { path: "/kualitas-air", element: /* @__PURE__ */ jsxRuntimeExports.jsx(KualitasAir, {}) }),
     /* @__PURE__ */ jsxRuntimeExports.jsx(Route, { path: "*", element: /* @__PURE__ */ jsxRuntimeExports.jsx(Navigate, { to: "/panel-daya", replace: true }) })
   ] }) }) });
 }

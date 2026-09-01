@@ -1,19 +1,22 @@
 /**
- * Bridge MQTT -> Firebase RTDB (adytia-pt) untuk sensor KETINGGIAN / level air.
+ * Bridge MQTT -> Firebase RTDB (adytia-pt) untuk stasiun WQMS
+ * (Water Quality Monitoring System): pH, DO, konduktivitas, kekeruhan, suhu.
  *
  * Alur:
- *   Sensor lapangan --publish--> Broker MQTT (36.66.205.254:8083)
- *     --> script ini (jalan terus-menerus di VPS, pakai firebase-admin)
+ *   Stasiun WQMS --publish--> Broker MQTT (36.66.205.254:8083, topik data/#)
+ *     --> script ini (jalan terus di VPS, pakai firebase-admin, BYPASS rules)
  *     --> RTDB adytia-pt:
- *           monitoring/ketinggian/{deviceId}/live             -> nilai terakhir (DITIMPA)
- *           monitoring/ketinggian/{deviceId}/log/{tgl}/{jam}  -> riwayat (DI-APPEND)
+ *           monitoring/kualitas-air/{idStation}/live             -> nilai terakhir (DITIMPA)
+ *           monitoring/kualitas-air/{idStation}/log/{tgl}/{jam}  -> riwayat (DI-APPEND)
  *
- * firebase-admin BYPASS rules RTDB, jadi tidak perlu melonggarkan database.rules.json.
+ * Contoh payload alat (semua string):
+ *   { idStation, _groupName:"WQMS", _terminalTime:"2026-09-01 14:24:01",
+ *     ph, do, conductivity, turbidity, logTemp, logHumid, vcc }
+ *   topic: data/wqms/brantas/bt01
  *
  * Jalankan di VPS:
- *   cd server && npm install         # pasang paket "mqtt"
- *   pm2 start bridge-ketinggian.js --name bridge-ketinggian
- *   pm2 save
+ *   cd server && npm install mqtt
+ *   pm2 start bridge-wqms.js --name bridge-wqms && pm2 save
  */
 
 const mqtt = require("mqtt");
@@ -39,59 +42,56 @@ const OPTIONS = {
 const TOPIC = "data/#";
 
 // ─── 3. Pemetaan idStation (dari alat) -> deviceId (di monitoring/devices)
-// Cara paling gampang: saat menambah device di panel admin, isi kolom
-// "dataPath" = monitoring/ketinggian/<idStation>  --> biarkan map ini kosong.
-// Kalau id RTDB terlanjur beda (mis. push-key), petakan di sini:
+// Biarkan kosong -> pakai idStation apa adanya. Isi kalau id di RTDB beda.
 const STATION_MAP = {
-  // "STATION-01": "-Nabc123pushKey",
+  // "278e44482bc0cd4255e21ee1a4c4e6e5": "bt01",
 };
 
-// ─── 4. Ambil nilai dari payload alat -> bentuk yang dibaca dashboard ─
-//  >>> SESUAIKAN nama field di bawah dengan payload ASLI sensor kamu <<<
+// ─── 4. Petakan payload alat -> bentuk yang dibaca dashboard ─────────
+// Field alat berupa string -> dikonversi ke angka.
 function mapPayload(d) {
-  const level_cm = num(
-    d.level_cm ?? d.level ?? d.ketinggian ?? d.tinggi ?? d.distance ?? d.jarak
-  );
-  const battery = num(d.battery ?? d.batt ?? d.bat ?? d.vbat ?? d.soc);
-  return { level_cm, battery };
+  return {
+    ph: num(d.ph),
+    do: num(d.do),                 // dissolved oxygen (mg/L)
+    conductivity: num(d.conductivity),
+    turbidity: num(d.turbidity),   // NTU
+    temp: num(d.logTemp),          // suhu (deg C)
+    humid: num(d.logHumid),        // kelembapan enclosure (%)
+    vcc: num(d.vcc),               // tegangan suplai (V)
+  };
 }
 
 // ─── util ────────────────────────────────────────────────────────────
 const num = (v) => {
+  if (v === "" || v == null) return null;
   const n = Number(v);
   return Number.isFinite(n) ? n : null;
 };
 
-// tanggal (YYYY-MM-DD) & jam (HH:MM:SS) zona WIB — konsisten dgn dashboard
-function nowWIB() {
+// RTDB key tidak boleh mengandung . $ # [ ] /
+const sanitizeKey = (s) => String(s).replace(/[.$#[\]/]/g, "_");
+
+// "2026-09-01 14:24:01" -> { date:"2026-09-01", time:"14:24:01" }
+// fallback: waktu server zona WIB.
+function resolveTime(terminalTime) {
+  if (typeof terminalTime === "string" &&
+      /^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}/.test(terminalTime)) {
+    return { date: terminalTime.slice(0, 10), time: terminalTime.slice(11, 19) };
+  }
   const p = Object.fromEntries(
     new Intl.DateTimeFormat("en-CA", {
       timeZone: "Asia/Jakarta",
       year: "numeric", month: "2-digit", day: "2-digit",
-      hour: "2-digit", minute: "2-digit", second: "2-digit",
-      hour12: false,
+      hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false,
     })
       .formatToParts(new Date())
       .map((x) => [x.type, x.value])
   );
-  return {
-    date: `${p.year}-${p.month}-${p.day}`,
-    time: `${p.hour}:${p.minute}:${p.second}`,
-  };
+  return { date: `${p.year}-${p.month}-${p.day}`, time: `${p.hour}:${p.minute}:${p.second}` };
 }
 
-// RTDB key tidak boleh mengandung . $ # [ ] /
-const sanitizeKey = (s) => String(s).replace(/[.$#[\]/]/g, "_");
-
-// jeda minimum antar-tulis LOG per device (ms). 0 = tulis tiap pesan masuk.
-const MIN_LOG_INTERVAL_MS = 0;
-const lastLogAt = {};
-
-// Mode rekam MENTAH: tulis SELURUH payload apa adanya + timestamp server ke
-//   monitoring/ketinggian/{deviceId}/raw/{tgl}/{jam}
-// Pakai ini untuk melihat nama field asli dari alat di Firebase, lalu sesuaikan
-// mapPayload() dan matikan (set false) kalau sudah tidak perlu.
-const CAPTURE_RAW = true;
+// Mode rekam MENTAH ke .../raw/{tgl}/{jam} — nyalakan kalau perlu debug payload.
+const CAPTURE_RAW = false;
 
 // ─── 5. MQTT ─────────────────────────────────────────────────────────
 const client = mqtt.connect(BROKER_URL, OPTIONS);
@@ -103,7 +103,6 @@ client.on("connect", () => {
     else console.log("[MQTT] Subscribe OK:", TOPIC);
   });
 });
-
 client.on("offline", () => console.log("[MQTT] Terputus dari broker"));
 client.on("reconnect", () => console.log("[MQTT] Menghubungkan ulang..."));
 client.on("error", (err) => console.error("[MQTT] Error:", err.message));
@@ -121,49 +120,39 @@ client.on("message", async (topic, message) => {
 
   const idStation = d.idStation ?? d.id ?? d.station;
   if (!idStation) {
-    console.error("[SKIP] idStation tidak ada di payload:", raw.slice(0, 120));
+    console.error("[SKIP] idStation tidak ada:", raw.slice(0, 120));
     return;
   }
 
   const deviceId = sanitizeKey(STATION_MAP[idStation] || idStation);
   const ts = Date.now();
-  const { date, time } = nowWIB();
-  const base = `monitoring/ketinggian/${deviceId}`;
-
-  // rekam payload mentah + timestamp server (untuk inspeksi struktur asli)
-  if (CAPTURE_RAW) {
-    try {
-      await db.ref(`${base}/raw/${date}/${time}`).set({ ...d, _ts: ts, _topic: topic });
-    } catch (err) {
-      console.error(`[RAW] gagal simpan ${deviceId}:`, err.message);
-    }
-  }
-
-  const { level_cm, battery } = mapPayload(d);
-
-  if (level_cm == null) {
-    console.warn(
-      `[RAW-ONLY] ${idStation}: level belum termapping — payload mentah tersimpan di ${base}/raw/${date}/${time}`
-    );
-    return;
-  }
+  const { date, time } = resolveTime(d._terminalTime);
+  const base = `monitoring/kualitas-air/${deviceId}`;
+  const m = mapPayload(d);
 
   try {
+    if (CAPTURE_RAW) {
+      await db.ref(`${base}/raw/${date}/${time}`).set({ ...d, _ts: ts, _topic: topic });
+    }
+
     // a) nilai realtime terakhir -> DITIMPA
     await db.ref(`${base}/live`).set({
-      level_cm,
+      ...m,
       ts,
-      ...(battery != null ? { battery } : {}),
+      terminalTime: d._terminalTime || null,
+      group: d._groupName || null,
       topic,
     });
 
-    // b) riwayat -> DI-APPEND (key = jam per detik)
-    if (ts - (lastLogAt[deviceId] || 0) >= MIN_LOG_INTERVAL_MS) {
-      await db.ref(`${base}/log/${date}/${time}`).set({ level_cm });
-      lastLogAt[deviceId] = ts;
-    }
+    // b) riwayat -> DI-APPEND (key = jam:menit:detik pembacaan)
+    await db.ref(`${base}/log/${date}/${time}`).set({
+      ph: m.ph, do: m.do, conductivity: m.conductivity,
+      turbidity: m.turbidity, temp: m.temp, vcc: m.vcc,
+    });
 
-    console.log(`[OK] ${deviceId}  ${level_cm} cm  ${date} ${time}`);
+    console.log(
+      `[OK] ${deviceId}  ${date} ${time}  pH=${m.ph} DO=${m.do} EC=${m.conductivity} NTU=${m.turbidity} T=${m.temp}`
+    );
   } catch (err) {
     console.error(`[FIREBASE] Gagal tulis ${deviceId}:`, err.message);
   }
@@ -176,6 +165,4 @@ for (const sig of ["SIGINT", "SIGTERM"]) {
     client.end(true, () => process.exit(0));
   });
 }
-process.on("unhandledRejection", (e) =>
-  console.error("[unhandledRejection]", e)
-);
+process.on("unhandledRejection", (e) => console.error("[unhandledRejection]", e));
