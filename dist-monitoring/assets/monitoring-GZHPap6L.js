@@ -50206,27 +50206,35 @@ function Ketinggian() {
 const ROOT = "monitoring/telemetri";
 const TABLE_DAYS = 10;
 const HOURS = Array.from({ length: 24 }, (_, i) => String(i).padStart(2, "0"));
-const COLORS = ["#22c55e", "#38bdf8", "#f59e0b", "#a855f7", "#ef4444", "#14b8a6", "#eab308", "#0ea5e9", "#6366f1", "#ec4899"];
+const COLORS = ["#38bdf8", "#22c55e", "#f59e0b", "#a855f7", "#ef4444", "#14b8a6", "#eab308", "#6366f1", "#ec4899", "#94a3b8"];
+const FRESH_MS = 15 * 60 * 1e3;
 const META = {
-  ph: { label: "pH", unit: "", dp: 2 },
-  do: { label: "DO", unit: "mg/L", dp: 2 },
-  conductivity: { label: "Konduktivitas", unit: "µS/cm", dp: 3 },
-  turbidity: { label: "Kekeruhan", unit: "NTU", dp: 2 },
-  logTemp: { label: "Suhu", unit: "°C", dp: 1 },
-  logHumid: { label: "Kelembapan", unit: "%", dp: 0 },
-  vcc: { label: "Suplai", unit: "V", dp: 1 },
-  level: { label: "Ketinggian", unit: "cm", dp: 1 },
-  water_level: { label: "Ketinggian", unit: "cm", dp: 1 },
-  wlevel: { label: "Ketinggian", unit: "cm", dp: 1 },
-  level_cm: { label: "Ketinggian", unit: "cm", dp: 1 },
-  elevation: { label: "Elevasi", unit: "m", dp: 2 },
-  debit: { label: "Debit", unit: "m³/s", dp: 2 }
+  wlevel: { label: "Tinggi Muka Air", unit: "cm", dp: 1, desc: "Ketinggian permukaan air terukur sensor" },
+  water_level: { label: "Tinggi Muka Air", unit: "cm", dp: 1, desc: "Ketinggian permukaan air terukur sensor" },
+  level: { label: "Tinggi Muka Air", unit: "cm", dp: 1, desc: "Ketinggian permukaan air terukur sensor" },
+  level_cm: { label: "Tinggi Muka Air", unit: "cm", dp: 1, desc: "Ketinggian permukaan air terukur sensor" },
+  tma: { label: "Tinggi Muka Air", unit: "cm", dp: 1, desc: "Ketinggian permukaan air terukur sensor" },
+  elevation: { label: "Elevasi Muka Air", unit: "m", dp: 2, desc: "Ketinggian muka air terhadap titik acuan" },
+  debit: { label: "Debit", unit: "m³/s", dp: 2, desc: "Laju aliran air" },
+  ph: { label: "pH", unit: "", dp: 2, desc: "Tingkat keasaman air (7 = netral, <7 asam, >7 basa)" },
+  do: { label: "Oksigen Terlarut", unit: "mg/L", dp: 2, desc: "Kadar oksigen dalam air — makin tinggi makin sehat untuk biota" },
+  turbidity: { label: "Kekeruhan", unit: "NTU", dp: 2, desc: "Tingkat kekeruhan air; makin rendah makin jernih" },
+  conductivity: { label: "Konduktivitas", unit: "µS/cm", dp: 3, desc: "Daya hantar listrik air — indikasi kadar mineral/garam terlarut" },
+  logTemp: { label: "Suhu", unit: "°C", dp: 1, desc: "Suhu terukur alat" },
+  logHumid: { label: "Kelembapan Panel", unit: "%", dp: 0, desc: "Kelembapan di dalam boks alat (diagnostik)" },
+  vcc: { label: "Tegangan Alat", unit: "V", dp: 1, desc: "Tegangan catu daya alat (diagnostik)" }
+};
+const ORDER = ["wlevel", "water_level", "level", "level_cm", "tma", "elevation", "debit", "ph", "do", "turbidity", "conductivity", "logTemp", "logHumid", "vcc"];
+const rank = (k2) => {
+  const i = ORDER.indexOf(k2);
+  return i < 0 ? 90 : i;
 };
 const metaFor = (key, i) => ({
   key,
   label: META[key]?.label || key,
   unit: META[key]?.unit ?? "",
   dp: META[key]?.dp ?? 2,
+  desc: META[key]?.desc || "",
   color: COLORS[i % COLORS.length]
 });
 function shiftDate(str, n) {
@@ -50235,11 +50243,22 @@ function shiftDate(str, n) {
 }
 function numericKeys(obj) {
   if (!obj) return [];
-  return Object.keys(obj).filter(
-    (k2) => k2 !== "ts" && typeof obj[k2] === "number" && Number.isFinite(obj[k2])
-  );
+  return Object.keys(obj).filter((k2) => k2 !== "ts" && typeof obj[k2] === "number" && Number.isFinite(obj[k2])).sort((a2, b) => rank(a2) - rank(b));
 }
-function KualitasAir() {
+function friendlyName(node, id) {
+  const parts = String(node?.live?.topic || "").split("/").filter(Boolean);
+  if (parts.length > 1) return parts.slice(1).map((s2) => s2.toUpperCase()).join(" · ");
+  return node?.live?.group || id.slice(0, 10);
+}
+function agoText(ts) {
+  if (!ts) return "—";
+  const s2 = Math.floor((Date.now() - ts) / 1e3);
+  if (s2 < 60) return `${s2} dtk lalu`;
+  if (s2 < 3600) return `${Math.floor(s2 / 60)} mnt lalu`;
+  if (s2 < 86400) return `${Math.floor(s2 / 3600)} jam lalu`;
+  return `${Math.floor(s2 / 86400)} hari lalu`;
+}
+function Stasiun() {
   const [devices, setDevices] = reactExports.useState([]);
   const [loading, setLoading] = reactExports.useState(true);
   const [deviceId, setDeviceId] = reactExports.useState("");
@@ -50248,13 +50267,16 @@ function KualitasAir() {
   const [live, setLive] = reactExports.useState(null);
   const [rows, setRows] = reactExports.useState([]);
   const [grid, setGrid] = reactExports.useState({});
+  const [showTable, setShowTable] = reactExports.useState(false);
   const device = devices.find((d) => d.id === deviceId) || devices[0];
   reactExports.useEffect(() => {
     return subscribe(ROOT, (val) => {
-      const list = Object.entries(val || {}).filter(([, node]) => numericKeys(node?.live).length > 0).map(([id, node]) => {
-        const g = node.live.group || "";
-        return { id, group: g, name: `${g ? g + " · " : ""}${id.slice(0, 12)}` };
-      }).sort((a2, b) => a2.name.localeCompare(b.name));
+      const list = Object.entries(val || {}).filter(([, node]) => numericKeys(node?.live).length > 0).map(([id, node]) => ({
+        id,
+        group: node.live.group || "",
+        online: Date.now() - (node.live.ts || 0) < FRESH_MS,
+        name: friendlyName(node, id)
+      })).sort((a2, b) => a2.name.localeCompare(b.name));
       setDevices(list);
       setLoading(false);
     });
@@ -50290,8 +50312,7 @@ function KualitasAir() {
     ).then((pairs) => {
       if (cancelled2) return;
       const g = {};
-      for (const [d, node] of pairs)
-        g[d] = logToRows(node, (e, time2) => ({ time: time2.slice(0, 5), ...e }));
+      for (const [d, node] of pairs) g[d] = logToRows(node, (e, time2) => ({ time: time2.slice(0, 5), ...e }));
       setGrid(g);
     });
     return () => {
@@ -50310,49 +50331,53 @@ function KualitasAir() {
       for (const r2 of grid[d]) if (r2[param] != null && !Number.isNaN(r2[param])) all.push(r2[param]);
     return all.length ? all.reduce((a2, b) => a2 + b, 0) / all.length : null;
   }, [grid, param]);
+  const gridHasData = reactExports.useMemo(
+    () => Object.values(grid).some((arr) => arr.some((r2) => r2[param] != null)),
+    [grid, param]
+  );
   const current2 = live?.[param] ?? null;
   const days = Array.from({ length: TABLE_DAYS }, (_, i) => shiftDate(date2, -(TABLE_DAYS - 1 - i)));
+  const online = live && Date.now() - (live.ts || 0) < FRESH_MS;
   const cell = (d, hh) => {
     const list = (grid[d] || []).filter((r2) => r2.time.startsWith(hh));
     if (!list.length) return { t: "--:--", v: "-" };
     const last = list[list.length - 1];
     return { t: last.time, v: last[param] == null ? "-" : Number(last[param]).toFixed(P2.dp) };
   };
-  if (loading) return /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-slate-400", children: "Memuat stasiun…" });
+  if (loading) return /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-slate-400", children: "Memuat daftar stasiun…" });
   if (!device)
-    return /* @__PURE__ */ jsxRuntimeExports.jsxs("p", { className: "text-slate-400", children: [
-      "Belum ada data stasiun di ",
-      /* @__PURE__ */ jsxRuntimeExports.jsx("code", { children: ROOT }),
-      ". Pastikan bridge di server sudah mengirim data."
+    return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "text-slate-400 text-sm", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsx("p", { children: "Belum ada data stasiun." }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "mt-1 text-slate-500", children: "Pastikan layanan pengumpul data (bridge) di server sudah berjalan." })
     ] });
   return /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
     /* @__PURE__ */ jsxRuntimeExports.jsx(DevicePicker, { devices, deviceId: device.id, onDevice: setDeviceId, date: date2, onDate: setDate }),
-    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-2 mb-4", children: [
-      /* @__PURE__ */ jsxRuntimeExports.jsx(
-        "button",
-        {
-          onClick: () => setDate(shiftDate(date2, -1)),
-          className: "px-3 py-1.5 rounded-lg bg-slate-800 border border-slate-700 text-sm hover:bg-slate-700",
-          children: "◀ Prev"
-        }
-      ),
-      /* @__PURE__ */ jsxRuntimeExports.jsx(
-        "button",
-        {
-          onClick: () => setDate(shiftDate(date2, 1)),
-          disabled: date2 >= todayStr(),
-          className: "px-3 py-1.5 rounded-lg bg-slate-800 border border-slate-700 text-sm hover:bg-slate-700 disabled:opacity-40",
-          children: "Next ▶"
-        }
-      ),
-      /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "text-xs text-slate-500 ml-2", children: [
-        device.name,
-        " · ",
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "bg-slate-800/60 border border-slate-700 rounded-xl px-4 py-3 mb-4 flex flex-wrap items-center gap-x-4 gap-y-1", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-lg font-bold text-white", children: device.name }),
+      device.group && /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-[11px] font-semibold px-2 py-0.5 rounded bg-slate-700 text-slate-200", children: device.group }),
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: `inline-flex items-center gap-1.5 text-xs ${online ? "text-emerald-400" : "text-slate-500"}`, children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: `w-2 h-2 rounded-full ${online ? "bg-emerald-400" : "bg-slate-500"}` }),
+        online ? "Online" : "Tidak aktif"
+      ] }),
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "text-xs text-slate-400", children: [
+        "Pembacaan terakhir: ",
+        live?.terminalTime || "—",
+        " (",
+        agoText(live?.ts),
+        ")"
+      ] }),
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "text-xs text-slate-500 ml-auto", children: [
         devices.length,
-        " stasiun"
+        " stasiun terhubung"
       ] })
     ] }),
-    /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex flex-wrap gap-1.5 mb-5", children: paramKeys.map((k2, i) => {
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-2 mb-4", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsx("button", { onClick: () => setDate(shiftDate(date2, -1)), className: "px-3 py-1.5 rounded-lg bg-slate-800 border border-slate-700 text-sm hover:bg-slate-700", children: "◀ Hari sebelumnya" }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx("button", { onClick: () => setDate(shiftDate(date2, 1)), disabled: date2 >= todayStr(), className: "px-3 py-1.5 rounded-lg bg-slate-800 border border-slate-700 text-sm hover:bg-slate-700 disabled:opacity-40", children: "Hari berikutnya ▶" }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-sm text-slate-300 ml-1", children: date2 })
+    ] }),
+    /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-xs text-slate-500 mb-1.5", children: "Pilih parameter yang ingin ditampilkan:" }),
+    /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex flex-wrap gap-1.5 mb-2", children: paramKeys.map((k2, i) => {
       const mp = metaFor(k2, i);
       return /* @__PURE__ */ jsxRuntimeExports.jsx(
         "button",
@@ -50364,44 +50389,62 @@ function KualitasAir() {
         k2
       );
     }) }),
+    P2.desc && /* @__PURE__ */ jsxRuntimeExports.jsxs("p", { className: "text-xs text-slate-400 mb-5", children: [
+      P2.label,
+      ": ",
+      P2.desc
+    ] }),
     /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "grid grid-cols-1 lg:grid-cols-[300px_1fr] gap-5 mb-6", children: [
       /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "rounded-2xl overflow-hidden border border-slate-700 bg-slate-900", children: [
         /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "bg-slate-950 text-center text-xs text-slate-400 py-1.5", children: [
-          "Update terakhir: ",
-          live?.terminalTime || (live?.ts ? new Date(live.ts).toLocaleString("id-ID") : "—")
+          P2.label,
+          " sekarang"
         ] }),
-        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "bg-blue-600 text-white text-center font-semibold py-1.5 text-sm", children: [
-          "Tertinggi: ",
-          fmt(high),
-          " ",
-          P2.unit
-        ] }),
-        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "bg-black text-center py-6", children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "bg-black text-center py-7", children: [
           /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-5xl font-bold text-green-400", children: fmt(current2) }),
           /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-lg text-green-500 ml-2", children: P2.unit })
         ] }),
-        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "bg-red-600 text-white text-center font-semibold py-1.5 text-sm", children: [
-          "Terendah: ",
-          fmt(low),
-          " ",
-          P2.unit
-        ] }),
-        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "px-4 py-3 text-xs", children: [
-          /* @__PURE__ */ jsxRuntimeExports.jsxs("p", { className: "text-emerald-400 font-semibold", children: [
-            "STATISTIK PERIODE (",
-            TABLE_DAYS,
-            " HARI)"
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "grid grid-cols-2 text-center text-sm", children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "bg-blue-600/90 text-white py-2", children: [
+            /* @__PURE__ */ jsxRuntimeExports.jsxs("p", { className: "text-[11px] opacity-80", children: [
+              "Tertinggi (",
+              date2.slice(5),
+              ")"
+            ] }),
+            /* @__PURE__ */ jsxRuntimeExports.jsxs("p", { className: "font-semibold", children: [
+              fmt(high),
+              " ",
+              P2.unit
+            ] })
           ] }),
-          /* @__PURE__ */ jsxRuntimeExports.jsxs("p", { className: "text-slate-300 flex justify-between mt-1", children: [
-            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "Rata-rata:" }),
+          /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "bg-red-600/90 text-white py-2", children: [
+            /* @__PURE__ */ jsxRuntimeExports.jsxs("p", { className: "text-[11px] opacity-80", children: [
+              "Terendah (",
+              date2.slice(5),
+              ")"
+            ] }),
+            /* @__PURE__ */ jsxRuntimeExports.jsxs("p", { className: "font-semibold", children: [
+              fmt(low),
+              " ",
+              P2.unit
+            ] })
+          ] })
+        ] }),
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "px-4 py-3 text-xs border-t border-slate-800", children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsxs("p", { className: "text-slate-300 flex justify-between", children: [
+            /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { children: [
+              "Rata-rata ",
+              TABLE_DAYS,
+              " hari"
+            ] }),
             /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "font-semibold", children: [
               fmt(periodAvg),
               " ",
               P2.unit
             ] })
           ] }),
-          live?.vcc != null && param !== "vcc" && /* @__PURE__ */ jsxRuntimeExports.jsxs("p", { className: "text-slate-400 flex justify-between mt-1", children: [
-            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "Suplai:" }),
+          live?.vcc != null && param !== "vcc" && /* @__PURE__ */ jsxRuntimeExports.jsxs("p", { className: "text-slate-500 flex justify-between mt-1", children: [
+            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "Tegangan alat" }),
             /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { children: [
               Number(live.vcc).toFixed(1),
               " V"
@@ -50409,23 +50452,44 @@ function KualitasAir() {
           ] })
         ] })
       ] }),
-      /* @__PURE__ */ jsxRuntimeExports.jsx(
+      /* @__PURE__ */ jsxRuntimeExports.jsx("div", { children: rows.some((r2) => r2[param] != null) ? /* @__PURE__ */ jsxRuntimeExports.jsx(
         TimeChart,
         {
-          title: `DATA ${P2.label.toUpperCase()} — ${device.name} (${date2})`,
+          title: `Grafik ${P2.label} — ${date2}`,
           data: rows.filter((r2) => r2[param] != null),
           series: [{ key: param, name: P2.label, color: P2.color }]
         }
-      )
+      ) : /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "h-full min-h-[220px] bg-slate-800 rounded-xl flex items-center justify-center text-slate-500 text-sm", children: "Belum ada pembacaan untuk tanggal ini" }) })
     ] }),
-    /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "bg-slate-900 border border-slate-800 rounded-xl overflow-x-auto", children: /* @__PURE__ */ jsxRuntimeExports.jsxs("table", { className: "text-xs w-full border-collapse", children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsxs(
+      "button",
+      {
+        onClick: () => setShowTable((s2) => !s2),
+        className: "text-sm text-slate-300 hover:text-white underline underline-offset-2 mb-3",
+        children: [
+          showTable ? "Sembunyikan" : "Tampilkan",
+          " tabel rekap per jam (",
+          TABLE_DAYS,
+          " hari)"
+        ]
+      }
+    ),
+    showTable && (!gridHasData ? /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "bg-slate-900 border border-slate-800 rounded-xl p-6 text-center text-slate-500 text-sm", children: [
+      "Belum ada riwayat pada rentang ",
+      days[0],
+      " – ",
+      days[days.length - 1],
+      ".",
+      /* @__PURE__ */ jsxRuntimeExports.jsx("br", {}),
+      "Tabel akan terisi otomatis seiring alat mengirim data."
+    ] }) : /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "bg-slate-900 border border-slate-800 rounded-xl overflow-x-auto", children: /* @__PURE__ */ jsxRuntimeExports.jsxs("table", { className: "text-xs w-full border-collapse", children: [
       /* @__PURE__ */ jsxRuntimeExports.jsxs("thead", { children: [
         /* @__PURE__ */ jsxRuntimeExports.jsxs("tr", { className: "bg-slate-800 text-slate-300", children: [
           /* @__PURE__ */ jsxRuntimeExports.jsx("th", { rowSpan: 2, className: "px-2 py-1 sticky left-0 bg-slate-800 border border-slate-700", children: "JAM" }),
-          days.map((d) => /* @__PURE__ */ jsxRuntimeExports.jsx("th", { colSpan: 2, className: "px-2 py-1 border border-slate-700 whitespace-nowrap", children: d }, d))
+          days.map((d) => /* @__PURE__ */ jsxRuntimeExports.jsx("th", { colSpan: 2, className: "px-2 py-1 border border-slate-700 whitespace-nowrap", children: d.slice(5) }, d))
         ] }),
         /* @__PURE__ */ jsxRuntimeExports.jsx("tr", { className: "bg-slate-800/70 text-slate-400", children: days.map((d) => /* @__PURE__ */ jsxRuntimeExports.jsxs(reactExports.Fragment, { children: [
-          /* @__PURE__ */ jsxRuntimeExports.jsx("th", { className: "px-2 py-0.5 border border-slate-700 font-medium", children: "WAKTU" }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("th", { className: "px-2 py-0.5 border border-slate-700 font-medium", children: "JAM" }),
           /* @__PURE__ */ jsxRuntimeExports.jsx("th", { className: "px-2 py-0.5 border border-slate-700 font-medium", children: P2.label.toUpperCase() })
         ] }, `h-${d}`)) })
       ] }),
@@ -50439,12 +50503,8 @@ function KualitasAir() {
           ] }, `${d}-${hh}`);
         })
       ] }, hh)) })
-    ] }) }),
-    /* @__PURE__ */ jsxRuntimeExports.jsxs("p", { className: "text-[11px] text-slate-600 mt-3", children: [
-      "Parameter & satuan terdeteksi otomatis dari data tiap stasiun. Satuan untuk field yang belum dikenal ditampilkan kosong — lengkapi di ",
-      /* @__PURE__ */ jsxRuntimeExports.jsx("code", { children: "META" }),
-      " pada halaman ini."
-    ] })
+    ] }) })),
+    /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-[11px] text-slate-600 mt-4", children: "Parameter terdeteksi otomatis dari data tiap stasiun. Nilai & jam berasal dari alat di lapangan." })
   ] });
 }
 function Shell({ children }) {
@@ -50464,7 +50524,7 @@ function Shell({ children }) {
 function App() {
   return /* @__PURE__ */ jsxRuntimeExports.jsx(BrowserRouter, { children: /* @__PURE__ */ jsxRuntimeExports.jsx(Shell, { children: /* @__PURE__ */ jsxRuntimeExports.jsxs(Routes, { children: [
     /* @__PURE__ */ jsxRuntimeExports.jsx(Route, { path: "/", element: /* @__PURE__ */ jsxRuntimeExports.jsx(Navigate, { to: "/stasiun", replace: true }) }),
-    /* @__PURE__ */ jsxRuntimeExports.jsx(Route, { path: "/stasiun", element: /* @__PURE__ */ jsxRuntimeExports.jsx(KualitasAir, {}) }),
+    /* @__PURE__ */ jsxRuntimeExports.jsx(Route, { path: "/stasiun", element: /* @__PURE__ */ jsxRuntimeExports.jsx(Stasiun, {}) }),
     /* @__PURE__ */ jsxRuntimeExports.jsx(Route, { path: "/kualitas-air", element: /* @__PURE__ */ jsxRuntimeExports.jsx(Navigate, { to: "/stasiun", replace: true }) }),
     /* @__PURE__ */ jsxRuntimeExports.jsx(Route, { path: "/panel-daya", element: /* @__PURE__ */ jsxRuntimeExports.jsx(PanelDaya, {}) }),
     /* @__PURE__ */ jsxRuntimeExports.jsx(Route, { path: "/ketinggian", element: /* @__PURE__ */ jsxRuntimeExports.jsx(Ketinggian, {}) }),
