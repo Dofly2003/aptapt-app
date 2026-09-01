@@ -60111,6 +60111,8 @@ function Peta() {
   const elRef = reactExports.useRef(null);
   const mapRef = reactExports.useRef(null);
   const layerRef = reactExports.useRef(null);
+  const markersRef = reactExports.useRef(/* @__PURE__ */ new Map());
+  const fittedRef = reactExports.useRef(false);
   const [stations, setStations] = reactExports.useState({});
   const [noCoord, setNoCoord] = reactExports.useState([]);
   reactExports.useEffect(() => {
@@ -60128,9 +60130,10 @@ function Peta() {
   reactExports.useEffect(() => {
     const lg = layerRef.current;
     if (!lg) return;
-    lg.clearLayers();
+    const markers = markersRef.current;
     const missing = [];
     const pts = [];
+    const seen = /* @__PURE__ */ new Set();
     Object.entries(stations).forEach(([id, node]) => {
       const live = node?.live;
       if (!live) return;
@@ -60146,26 +60149,32 @@ function Peta() {
         missing.push(id);
         return;
       }
+      seen.add(id);
       pts.push([lat, lon]);
       const online = Date.now() - (live.ts || 0) < FRESH_MS;
-      const mColor = approx ? "#f59e0b" : online ? "#38bdf8" : "#64748b";
-      const mFill = approx ? "#f59e0b" : online ? "#0ea5e9" : "#475569";
-      L$1.circleMarker([lat, lon], {
-        radius: 7,
-        color: mColor,
-        fillColor: mFill,
-        fillOpacity: 1,
-        weight: 2
-      }).bindTooltip(cardHtml(id, live, approx), {
-        permanent: true,
-        direction: "top",
-        className: "wq-tip",
-        offset: [0, -8],
-        interactive: true
-      }).addTo(lg);
+      const stroke = approx ? "#f59e0b" : online ? "#38bdf8" : "#64748b";
+      const fill = approx ? "#f59e0b" : online ? "#0ea5e9" : "#475569";
+      let m = markers.get(id);
+      if (!m) {
+        m = L$1.circleMarker([lat, lon], { radius: 7, color: stroke, fillColor: fill, fillOpacity: 1, weight: 2 });
+        m.bindTooltip("", { permanent: true, direction: "top", className: "wq-tip", offset: [0, -8], interactive: true });
+        m.addTo(lg);
+        markers.set(id, m);
+      } else {
+        m.setLatLng([lat, lon]);
+        m.setStyle({ color: stroke, fillColor: fill });
+      }
+      m.setTooltipContent(cardHtml(id, live, approx));
     });
+    for (const [id, m] of markers) {
+      if (!seen.has(id)) {
+        lg.removeLayer(m);
+        markers.delete(id);
+      }
+    }
     setNoCoord(missing);
-    if (pts.length && mapRef.current) {
+    if (!fittedRef.current && pts.length && mapRef.current) {
+      fittedRef.current = true;
       try {
         mapRef.current.fitBounds(L$1.latLngBounds(pts).pad(0.2));
       } catch {

@@ -63,6 +63,8 @@ export default function Peta() {
   const elRef = useRef(null);
   const mapRef = useRef(null);
   const layerRef = useRef(null);
+  const markersRef = useRef(new Map()); // id -> circleMarker
+  const fittedRef = useRef(false);
   const [stations, setStations] = useState({});
   const [noCoord, setNoCoord] = useState([]);
 
@@ -83,9 +85,11 @@ export default function Peta() {
   useEffect(() => {
     const lg = layerRef.current;
     if (!lg) return;
-    lg.clearLayers();
+    const markers = markersRef.current;
     const missing = [];
     const pts = [];
+    const seen = new Set();
+
     Object.entries(stations).forEach(([id, node]) => {
       const live = node?.live;
       if (!live) return;
@@ -95,28 +99,35 @@ export default function Peta() {
       if ((lat == null || lon == null) && COORDS[id]) [lat, lon] = COORDS[id];
       if ((lat == null || lon == null) && DUMMY_SPREAD) { [lat, lon] = hashCoord(id); approx = true; }
       if (lat == null || lon == null) { missing.push(id); return; }
+      seen.add(id);
       pts.push([lat, lon]);
       const online = Date.now() - (live.ts || 0) < FRESH_MS;
-      const mColor = approx ? "#f59e0b" : online ? "#38bdf8" : "#64748b";
-      const mFill = approx ? "#f59e0b" : online ? "#0ea5e9" : "#475569";
-      L.circleMarker([lat, lon], {
-        radius: 7,
-        color: mColor,
-        fillColor: mFill,
-        fillOpacity: 1,
-        weight: 2,
-      })
-        .bindTooltip(cardHtml(id, live, approx), {
-          permanent: true,
-          direction: "top",
-          className: "wq-tip",
-          offset: [0, -8],
-          interactive: true,
-        })
-        .addTo(lg);
+      const stroke = approx ? "#f59e0b" : online ? "#38bdf8" : "#64748b";
+      const fill = approx ? "#f59e0b" : online ? "#0ea5e9" : "#475569";
+
+      let m = markers.get(id);
+      if (!m) {
+        m = L.circleMarker([lat, lon], { radius: 7, color: stroke, fillColor: fill, fillOpacity: 1, weight: 2 });
+        m.bindTooltip("", { permanent: true, direction: "top", className: "wq-tip", offset: [0, -8], interactive: true });
+        m.addTo(lg);
+        markers.set(id, m);
+      } else {
+        m.setLatLng([lat, lon]);
+        m.setStyle({ color: stroke, fillColor: fill });
+      }
+      m.setTooltipContent(cardHtml(id, live, approx)); // update konten saja, tanpa redraw
     });
+
+    // buang marker stasiun yang hilang
+    for (const [id, m] of markers) {
+      if (!seen.has(id)) { lg.removeLayer(m); markers.delete(id); }
+    }
+
     setNoCoord(missing);
-    if (pts.length && mapRef.current) {
+
+    // auto-fit HANYA sekali (jangan reset zoom user saat data live masuk)
+    if (!fittedRef.current && pts.length && mapRef.current) {
+      fittedRef.current = true;
       try { mapRef.current.fitBounds(L.latLngBounds(pts).pad(0.2)); } catch { /* satu titik */ }
     }
   }, [stations]);
