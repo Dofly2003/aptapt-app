@@ -60063,16 +60063,33 @@ function requireLeafletSrc() {
 var leafletSrcExports = requireLeafletSrc();
 const L$1 = /* @__PURE__ */ getDefaultExportFromCjs(leafletSrcExports);
 const ROOT = "monitoring/telemetri";
-const CENTER = [-7.75, 112.4];
+const CENTER = [-7.5, 110.6];
 const ZOOM = 8;
-const CARD_ZOOM = 11;
+const CARD_ZOOM = 8;
 const FRESH_MS = 15 * 60 * 1e3;
-const COORDS = {
-  // "awlr13063l": [-7.98, 112.63],
-  // "278e44482bc0cd4255e21ee1a4c4e6e5": [-7.62, 112.19],
-};
-const DUMMY_SPREAD = true;
-const JATIM = { latMin: -8.55, latMax: -7.05, lonMin: 111.3, lonMax: 114.2 };
+const SLOTS = [
+  { name: "ST-01", at: [-6.75, 106.45] },
+  { name: "ST-02", at: [-6.4, 108.1] },
+  { name: "ST-03", at: [-6.75, 110.45] },
+  { name: "ST-04", at: [-6.85, 112] },
+  { name: "ST-05", at: [-7.3, 106.7] },
+  { name: "ST-06", at: [-7.2, 107.9] },
+  { name: "ST-07", at: [-7.55, 109.1] },
+  { name: "ST-08", at: [-7.8, 110.45] },
+  { name: "ST-09", at: [-7.6, 111.55] },
+  { name: "ST-10", at: [-6.85, 105.75] },
+  { name: "ST-11", at: [-7.6, 107.65] },
+  { name: "ST-12", at: [-7.7, 108.55] },
+  { name: "ST-13", at: [-7.9, 110.95] },
+  { name: "ST-14", at: [-8.05, 112.45] },
+  { name: "ST-15", at: [-7.85, 107.95] },
+  { name: "ST-16", at: [-7.95, 109] },
+  { name: "ST-17", at: [-8.1, 110.3] },
+  { name: "ST-18", at: [-8.2, 111.3] },
+  { name: "ST-19", at: [-8.35, 113.1] },
+  { name: "ST-20", at: [-7.75, 113.9] }
+];
+const JAVA = { latMin: -8.4, latMax: -6.3, lonMin: 106, lonMax: 114.3 };
 function hashCoord(id) {
   let a2 = 7, b = 13;
   for (let i = 0; i < id.length; i++) {
@@ -60080,13 +60097,13 @@ function hashCoord(id) {
     b = b * 131 + id.charCodeAt(i) * 7 >>> 0;
   }
   return [
-    JATIM.latMin + a2 % 1e4 / 1e4 * (JATIM.latMax - JATIM.latMin),
-    JATIM.lonMin + b % 1e4 / 1e4 * (JATIM.lonMax - JATIM.lonMin)
+    JAVA.latMin + a2 % 1e4 / 1e4 * (JAVA.latMax - JAVA.latMin),
+    JAVA.lonMin + b % 1e4 / 1e4 * (JAVA.lonMax - JAVA.lonMin)
   ];
 }
 const LAT_KEYS = ["lat", "latitude", "gpsLat", "Lat"];
 const LON_KEYS = ["lon", "lng", "long", "longitude", "gpsLon", "Lng"];
-const LEVEL_KEYS = ["wlevel", "water_level", "level", "level_cm", "tma", "elevation"];
+const LEVEL_KEYS = ["wlevel", "water_level", "level", "level_cm", "tma"];
 const numOr = (v) => v != null && Number.isFinite(Number(v)) ? Number(v) : null;
 const pick = (obj, keys) => {
   for (const k2 of keys) {
@@ -60095,16 +60112,24 @@ const pick = (obj, keys) => {
   }
   return null;
 };
-function cardHtml(id, live, approx) {
-  const lvl = pick(live, LEVEL_KEYS);
+function levelMeter(live) {
+  const el = numOr(live?.elevation);
+  if (el != null) return el;
+  const cm = pick(live, LEVEL_KEYS);
+  return cm == null ? null : cm / 100;
+}
+function cardHtml(name2, live, approx) {
+  const lvl = levelMeter(live);
   const v = numOr(live?.vcc);
+  const ph = numOr(live?.ph);
   const stale = Date.now() - (live?.ts || 0) > FRESH_MS;
+  const row = (icon, label, val) => `<div class="wq-row"><span>${icon}</span><span class="wq-lbl">${label}</span><b>${val}</b></div>`;
   return `
     <div class="wq-card ${stale ? "wq-stale" : ""}">
-      <div class="wq-id">${id.slice(0, 8)}…</div>
-      <div class="wq-row"><span>💧</span> Water Level: <b>${lvl == null ? "– " : lvl.toFixed(2) + " "}</b>${lvl == null ? "m" : "cm"}</div>
-      <div class="wq-row"><span>⚡</span> Tegangan: <b>${v == null ? "– " : v.toFixed(1) + " "}</b>V</div>
-      <div class="wq-row wq-time"><span>🕓</span> ${live?.terminalTime || "—"}</div>
+      <div class="wq-id">${name2}</div>
+      ${row("💧", "Water Level", lvl == null ? "– m" : lvl.toFixed(2) + " m")}
+      ${row("⚡", "Tegangan Panel", v == null ? "– V" : v.toFixed(1) + " V")}
+      ${row("🟢", "Kualitas Air", ph == null || ph === 0 ? "–" : "pH " + ph.toFixed(1))}
       ${approx ? '<div class="wq-approx">◦ posisi perkiraan</div>' : ""}
     </div>`;
 }
@@ -60115,7 +60140,6 @@ function Peta() {
   const markersRef = reactExports.useRef(/* @__PURE__ */ new Map());
   const fittedRef = reactExports.useRef(false);
   const [stations, setStations] = reactExports.useState({});
-  const [noCoord, setNoCoord] = reactExports.useState([]);
   reactExports.useEffect(() => {
     const map2 = L$1.map(elRef.current, { center: CENTER, zoom: ZOOM, scrollWheelZoom: true });
     L$1.tileLayer(
@@ -60137,29 +60161,29 @@ function Peta() {
     const lg = layerRef.current;
     if (!lg) return;
     const markers = markersRef.current;
-    const missing = [];
     const pts = [];
     const seen = /* @__PURE__ */ new Set();
-    Object.entries(stations).forEach(([id, node]) => {
-      const live = node?.live;
-      if (!live) return;
+    const entries = Object.entries(stations).filter(([, node]) => node?.live).sort(([a2], [b]) => a2.localeCompare(b));
+    entries.forEach(([id, node], idx) => {
+      const live = node.live;
       let lat = pick(live, LAT_KEYS);
       let lon = pick(live, LON_KEYS);
       let approx = false;
-      if ((lat == null || lon == null) && COORDS[id]) [lat, lon] = COORDS[id];
-      if ((lat == null || lon == null) && DUMMY_SPREAD) {
-        [lat, lon] = hashCoord(id);
-        approx = true;
-      }
+      let name2 = SLOTS[idx]?.name || id.slice(0, 8) + "…";
       if (lat == null || lon == null) {
-        missing.push(id);
-        return;
+        if (SLOTS[idx]) {
+          [lat, lon] = SLOTS[idx].at;
+          approx = true;
+        } else {
+          [lat, lon] = hashCoord(id);
+          approx = true;
+        }
       }
       seen.add(id);
       pts.push([lat, lon]);
       const online = Date.now() - (live.ts || 0) < FRESH_MS;
-      const stroke = approx ? "#f59e0b" : online ? "#38bdf8" : "#64748b";
-      const fill = approx ? "#f59e0b" : online ? "#0ea5e9" : "#475569";
+      const stroke = online ? "#38bdf8" : "#64748b";
+      const fill = online ? "#0ea5e9" : "#475569";
       let m = markers.get(id);
       if (!m) {
         m = L$1.circleMarker([lat, lon], { radius: 7, color: stroke, fillColor: fill, fillOpacity: 1, weight: 2 });
@@ -60171,7 +60195,7 @@ function Peta() {
         m.setLatLng([lat, lon]);
         m.setStyle({ color: stroke, fillColor: fill });
       }
-      const html = cardHtml(id, live, approx);
+      const html = cardHtml(name2, live, approx);
       m.setTooltipContent(html);
       m.setPopupContent(html);
     });
@@ -60181,11 +60205,10 @@ function Peta() {
         markers.delete(id);
       }
     }
-    setNoCoord(missing);
     if (!fittedRef.current && pts.length && mapRef.current) {
       fittedRef.current = true;
       try {
-        mapRef.current.fitBounds(L$1.latLngBounds(pts).pad(0.2));
+        mapRef.current.fitBounds(L$1.latLngBounds(pts).pad(0.15));
       } catch {
       }
     }
@@ -60198,15 +60221,16 @@ function Peta() {
         .wq-pop .leaflet-popup-content-wrapper { background: transparent; box-shadow: none; }
         .wq-pop .leaflet-popup-content { margin: 0; }
         .wq-pop .leaflet-popup-tip { display: none; }
-        .wq-card { background: rgba(11,42,74,.92); border: 1px solid #1e63a8; border-radius: 10px;
-          padding: 7px 10px; color: #dbeafe; font-size: 11px; line-height: 1.55; min-width: 148px;
-          box-shadow: 0 6px 18px rgba(0,0,0,.45); }
-        .wq-card.wq-stale { opacity: .6; border-color: #475569; }
-        .wq-id { font-weight: 700; color: #7dd3fc; margin-bottom: 2px; letter-spacing: .3px; }
+        .wq-card { background: rgba(12,32,58,.94); border: 1px solid #29527f; border-radius: 8px;
+          padding: 0 0 6px; color: #dbeafe; font-size: 11px; line-height: 1.5; min-width: 176px;
+          box-shadow: 0 8px 20px rgba(0,0,0,.5); overflow: hidden; }
+        .wq-card.wq-stale { opacity: .55; }
+        .wq-id { font-weight: 700; color: #fff; background: #2563eb; padding: 3px 9px; font-size: 11px; letter-spacing: .5px; }
+        .wq-row { display: flex; align-items: center; gap: 6px; padding: 2px 9px; }
+        .wq-row .wq-lbl { color: #93c5fd; flex: 1; }
         .wq-row b { color: #f8fafc; font-weight: 700; }
-        .wq-row span { opacity: .8; }
-        .wq-time { color: #93c5fd; }
-        .wq-approx { margin-top: 3px; color: #fbbf24; font-size: 10px; }
+        .wq-row span:first-child { width: 13px; text-align: center; }
+        .wq-approx { padding: 0 9px; color: #fbbf24; font-size: 10px; }
       ` }),
     /* @__PURE__ */ jsxRuntimeExports.jsx(
       "div",
@@ -60215,26 +60239,14 @@ function Peta() {
         style: { height: "calc(100vh - 130px)", width: "100%", borderRadius: 12, overflow: "hidden", background: "#0f172a" }
       }
     ),
-    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "absolute top-3 right-3 z-[500] bg-slate-900/85 border border-slate-700 rounded-lg px-3 py-2 text-[11px] text-slate-300 pointer-events-none", children: [
-      "Perbesar peta (zoom ≥ ",
-      CARD_ZOOM,
-      ") untuk melihat kartu tiap stasiun, atau klik titiknya."
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "absolute bottom-3 left-3 z-[500] bg-slate-900/90 border border-slate-700 rounded-lg px-3 py-2 text-[11px] text-slate-300", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "font-semibold text-slate-200 mb-1", children: "KETERANGAN" }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx("p", { children: "💧 Water Level (m)" }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx("p", { children: "⚡ Tegangan Panel (V)" }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx("p", { children: "🟢 Kualitas Air (pH)" }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-slate-500 mt-1", children: "◦ posisi masih perkiraan (dummy)" })
     ] }),
-    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "absolute bottom-3 left-3 z-[500] bg-slate-900/92 border border-amber-700/60 rounded-lg p-3 text-xs max-w-[300px]", children: [
-      /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "font-semibold text-amber-400 mb-1", children: "Posisi marker masih perkiraan (dummy)" }),
-      /* @__PURE__ */ jsxRuntimeExports.jsxs("p", { className: "text-slate-400", children: [
-        "Stasiun disebar acak di area Jawa Timur. Isi koordinat asli di ",
-        /* @__PURE__ */ jsxRuntimeExports.jsx("code", { children: "COORDS" }),
-        " pada ",
-        /* @__PURE__ */ jsxRuntimeExports.jsx("code", { children: "Peta.jsx" }),
-        " (",
-        /* @__PURE__ */ jsxRuntimeExports.jsx("code", { children: '"idStation": [lat, lng]' }),
-        "), lalu set ",
-        /* @__PURE__ */ jsxRuntimeExports.jsx("code", { children: "DUMMY_SPREAD = false" }),
-        "."
-      ] })
-    ] }),
-    !DUMMY_SPREAD
+    /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "absolute top-3 right-3 z-[500] bg-slate-900/85 border border-slate-700 rounded-lg px-3 py-2 text-[11px] text-slate-300 pointer-events-none", children: "Zoom out jauh untuk sembunyikan kartu · klik titik untuk detail" })
   ] });
 }
 function Shell({ children }) {

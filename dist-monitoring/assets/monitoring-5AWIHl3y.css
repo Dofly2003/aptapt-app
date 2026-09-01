@@ -2137,9 +2137,6 @@ video {
   --tw-border-opacity: 1;
   border-color: rgb(217 119 6 / var(--tw-border-opacity));
 }
-.border-amber-700\/60 {
-  border-color: rgb(180 83 9 / 0.6);
-}
 .border-black {
   --tw-border-opacity: 1;
   border-color: rgb(0 0 0 / var(--tw-border-opacity));
@@ -2756,6 +2753,9 @@ video {
 }
 .bg-slate-900\/85 {
   background-color: rgb(15 23 42 / 0.85);
+}
+.bg-slate-900\/90 {
+  background-color: rgb(15 23 42 / 0.9);
 }
 .bg-slate-950 {
   --tw-bg-opacity: 1;
