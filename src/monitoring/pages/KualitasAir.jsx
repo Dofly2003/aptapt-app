@@ -2,9 +2,10 @@ import { Fragment, useEffect, useMemo, useState } from "react";
 import { ref, get } from "firebase/database";
 import { rtdb } from "../lib/firebase";
 import { subscribe, todayStr, logToRows } from "../lib/rtdb";
-import { useDevices } from "../hooks/useDevices";
 import DevicePicker from "../components/DevicePicker";
 import TimeChart from "../components/TimeChart";
+
+const ROOT = "monitoring/kualitas-air";
 
 /* Parameter kualitas air. Satuan = asumsi, cocokkan dengan sensor terpasang. */
 const PARAMS = [
@@ -26,7 +27,9 @@ function shiftDate(str, n) {
 }
 
 export default function KualitasAir() {
-  const { devices, loading } = useDevices("kualitas-air");
+  // Device diambil LANGSUNG dari node data (tanpa perlu daftar di monitoring/devices).
+  const [devices, setDevices] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [deviceId, setDeviceId] = useState("");
   const [date, setDate] = useState(todayStr());
   const [param, setParam] = useState("ph");
@@ -38,13 +41,32 @@ export default function KualitasAir() {
   const P = PARAMS.find((p) => p.key === param);
   const fmt = (v) => (v == null || Number.isNaN(v) ? "–" : Number(v).toFixed(P.dp));
 
+  // daftar stasiun = anak-anak node monitoring/kualitas-air yang punya
+  // minimal satu parameter kualitas air di /live (buang sisa node non-WQMS).
+  useEffect(() => {
+    return subscribe(ROOT, (val) => {
+      const list = Object.entries(val || {})
+        .filter(([, node]) => {
+          const lv = node?.live || {};
+          return ["ph", "do", "conductivity", "turbidity"].some((k) => lv[k] != null);
+        })
+        .map(([id, node]) => ({
+          id,
+          name: node?.live?.group
+            ? `${node.live.group} · ${id.slice(0, 8)}`
+            : id.slice(0, 16),
+        }))
+        .sort((a, b) => a.name.localeCompare(b.name));
+      setDevices(list);
+      setLoading(false);
+    });
+  }, []);
+
   useEffect(() => {
     if (!deviceId && devices.length) setDeviceId(devices[0].id);
   }, [devices, deviceId]);
 
-  const basePath = device
-    ? device.dataPath || `monitoring/kualitas-air/${device.id}`
-    : null;
+  const basePath = device ? `${ROOT}/${device.id}` : null;
 
   // nilai realtime terakhir
   useEffect(() => {
@@ -123,11 +145,11 @@ export default function KualitasAir() {
     return { t: last.time, v: last[param] == null ? "-" : Number(last[param]).toFixed(P.dp) };
   };
 
-  if (loading) return <p className="text-slate-400">Memuat device…</p>;
+  if (loading) return <p className="text-slate-400">Memuat stasiun…</p>;
   if (!device)
     return (
       <p className="text-slate-400">
-        Belum ada device kualitas air. Tambahkan di panel admin (jenis: Kualitas Air).
+        Belum ada data stasiun di <code>{ROOT}</code>. Pastikan bridge WQMS di server sudah mengirim data.
       </p>
     );
 
@@ -149,7 +171,7 @@ export default function KualitasAir() {
         >
           Next ▶
         </button>
-        <span className="text-xs text-slate-500 ml-2">{device.name}{device.location ? ` — ${device.location}` : ""}</span>
+        <span className="text-xs text-slate-500 ml-2">{device.name}</span>
       </div>
 
       {/* pemilih parameter */}

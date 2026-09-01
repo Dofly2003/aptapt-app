@@ -50203,6 +50203,7 @@ function Ketinggian() {
     ] })
   ] });
 }
+const ROOT = "monitoring/kualitas-air";
 const PARAMS = [
   { key: "ph", label: "pH", unit: "", color: "#22c55e", dp: 2 },
   { key: "do", label: "DO", unit: "mg/L", color: "#38bdf8", dp: 2 },
@@ -50218,7 +50219,8 @@ function shiftDate(str, n) {
   return todayStr(dt);
 }
 function KualitasAir() {
-  const { devices, loading } = useDevices("kualitas-air");
+  const [devices, setDevices] = reactExports.useState([]);
+  const [loading, setLoading] = reactExports.useState(true);
   const [deviceId, setDeviceId] = reactExports.useState("");
   const [date2, setDate] = reactExports.useState(todayStr());
   const [param, setParam] = reactExports.useState("ph");
@@ -50229,9 +50231,22 @@ function KualitasAir() {
   const P2 = PARAMS.find((p) => p.key === param);
   const fmt = (v) => v == null || Number.isNaN(v) ? "–" : Number(v).toFixed(P2.dp);
   reactExports.useEffect(() => {
+    return subscribe(ROOT, (val) => {
+      const list = Object.entries(val || {}).filter(([, node]) => {
+        const lv = node?.live || {};
+        return ["ph", "do", "conductivity", "turbidity"].some((k2) => lv[k2] != null);
+      }).map(([id, node]) => ({
+        id,
+        name: node?.live?.group ? `${node.live.group} · ${id.slice(0, 8)}` : id.slice(0, 16)
+      })).sort((a2, b) => a2.name.localeCompare(b.name));
+      setDevices(list);
+      setLoading(false);
+    });
+  }, []);
+  reactExports.useEffect(() => {
     if (!deviceId && devices.length) setDeviceId(devices[0].id);
   }, [devices, deviceId]);
-  const basePath = device ? device.dataPath || `monitoring/kualitas-air/${device.id}` : null;
+  const basePath = device ? `${ROOT}/${device.id}` : null;
   reactExports.useEffect(() => {
     if (!basePath) return;
     return subscribe(`${basePath}/live`, setLive);
@@ -50298,9 +50313,13 @@ function KualitasAir() {
     const last = list[list.length - 1];
     return { t: last.time, v: last[param] == null ? "-" : Number(last[param]).toFixed(P2.dp) };
   };
-  if (loading) return /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-slate-400", children: "Memuat device…" });
+  if (loading) return /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-slate-400", children: "Memuat stasiun…" });
   if (!device)
-    return /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-slate-400", children: "Belum ada device kualitas air. Tambahkan di panel admin (jenis: Kualitas Air)." });
+    return /* @__PURE__ */ jsxRuntimeExports.jsxs("p", { className: "text-slate-400", children: [
+      "Belum ada data stasiun di ",
+      /* @__PURE__ */ jsxRuntimeExports.jsx("code", { children: ROOT }),
+      ". Pastikan bridge WQMS di server sudah mengirim data."
+    ] });
   return /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
     /* @__PURE__ */ jsxRuntimeExports.jsx(DevicePicker, { devices, deviceId: device.id, onDevice: setDeviceId, date: date2, onDate: setDate }),
     /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-2 mb-4", children: [
@@ -50321,10 +50340,7 @@ function KualitasAir() {
           children: "Next ▶"
         }
       ),
-      /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "text-xs text-slate-500 ml-2", children: [
-        device.name,
-        device.location ? ` — ${device.location}` : ""
-      ] })
+      /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-xs text-slate-500 ml-2", children: device.name })
     ] }),
     /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex flex-wrap gap-1.5 mb-5", children: PARAMS.map((p) => /* @__PURE__ */ jsxRuntimeExports.jsx(
       "button",
