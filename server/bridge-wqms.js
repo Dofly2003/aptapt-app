@@ -39,13 +39,21 @@ const OPTIONS = {
   reconnectPeriod: 1000,
   keepalive: 60,
 };
-const TOPIC = "data/#";
+// Broker ini dipakai BANYAK stasiun (AWLR level air, dll). Ambil cabang WQMS saja.
+const TOPIC = "data/wqms/#";
 
 // ─── 3. Pemetaan idStation (dari alat) -> deviceId (di monitoring/devices)
 // Biarkan kosong -> pakai idStation apa adanya. Isi kalau id di RTDB beda.
 const STATION_MAP = {
   // "278e44482bc0cd4255e21ee1a4c4e6e5": "bt01",
 };
+
+// Hanya proses idStation yang terdaftar di sini. Kosongkan Set -> terima semua
+// stasiun yang lolos filter topik + punya parameter kualitas air.
+const STATION_ALLOW = new Set([
+  // "278e44482bc0cd4255e21ee1a4c4e6e5",
+  // "826fec99fead5991d924d3583fb46f86",
+]);
 
 // ─── 4. Petakan payload alat -> bentuk yang dibaca dashboard ─────────
 // Field alat berupa string -> dikonversi ke angka.
@@ -124,11 +132,21 @@ client.on("message", async (topic, message) => {
     return;
   }
 
+  if (STATION_ALLOW.size && !STATION_ALLOW.has(String(idStation))) {
+    return; // stasiun tidak diizinkan — diam saja
+  }
+
   const deviceId = sanitizeKey(STATION_MAP[idStation] || idStation);
   const ts = Date.now();
   const { date, time } = resolveTime(d._terminalTime);
   const base = `monitoring/kualitas-air/${deviceId}`;
   const m = mapPayload(d);
+
+  // Tolak payload non-WQMS (mis. AWLR yang cuma kirim suhu) — semua parameter kosong.
+  if ([m.ph, m.do, m.conductivity, m.turbidity].every((v) => v == null)) {
+    console.log(`[SKIP] ${idStation}: tanpa parameter kualitas air`);
+    return;
+  }
 
   try {
     if (CAPTURE_RAW) {
