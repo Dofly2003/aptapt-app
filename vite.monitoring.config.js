@@ -25,5 +25,27 @@ export default defineConfig({
     exclude: ["pdfjs-dist"],
   },
 
-  plugins: [react()],
+  plugins: [
+    react(),
+    {
+      // Dev-only: sajikan monitoring.html untuk SEMUA route (SPA fallback),
+      // supaya `npm run dev:monitoring` + buka /kualitas-air tidak 404 ke app utama.
+      name: "monitoring-html-fallback",
+      apply: "serve",
+      configureServer(server) {
+        server.middlewares.use((req, _res, next) => {
+          if (
+            req.method === "GET" &&
+            req.headers.accept?.includes("text/html") &&
+            !req.url.startsWith("/@") &&
+            !req.url.startsWith("/node_modules") &&
+            !req.url.includes(".")
+          ) {
+            req.url = "/monitoring.html";
+          }
+          next();
+        });
+      },
+    },
+  ],
 });
