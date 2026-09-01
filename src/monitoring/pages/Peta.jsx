@@ -6,6 +6,7 @@ import { subscribe } from "../lib/rtdb";
 const ROOT = "monitoring/telemetri";
 const CENTER = [-7.75, 112.4];
 const ZOOM = 8;
+const CARD_ZOOM = 11; // kartu tampil permanen mulai zoom ini ke atas
 const FRESH_MS = 15 * 60 * 1000;
 
 /* Koordinat manual per stasiun — dipakai kalau alat TIDAK mengirim lat/lon.
@@ -76,6 +77,15 @@ export default function Peta() {
     ).addTo(map);
     layerRef.current = L.layerGroup().addTo(map);
     mapRef.current = map;
+
+    // Kartu permanen hanya saat zoom cukup dekat; kalau jauh -> sembunyikan
+    // (biar tidak tumpuk). Titik tetap terlihat, klik titik untuk lihat kartu.
+    const applyZoomClass = () => {
+      elRef.current?.classList.toggle("cards-hidden", map.getZoom() < CARD_ZOOM);
+    };
+    map.on("zoomend", applyZoomClass);
+    applyZoomClass();
+
     setTimeout(() => map.invalidateSize(), 100);
     return () => map.remove();
   }, []);
@@ -109,13 +119,16 @@ export default function Peta() {
       if (!m) {
         m = L.circleMarker([lat, lon], { radius: 7, color: stroke, fillColor: fill, fillOpacity: 1, weight: 2 });
         m.bindTooltip("", { permanent: true, direction: "top", className: "wq-tip", offset: [0, -8], interactive: true });
+        m.bindPopup("", { className: "wq-pop", closeButton: false }); // untuk klik saat zoom jauh
         m.addTo(lg);
         markers.set(id, m);
       } else {
         m.setLatLng([lat, lon]);
         m.setStyle({ color: stroke, fillColor: fill });
       }
-      m.setTooltipContent(cardHtml(id, live, approx)); // update konten saja, tanpa redraw
+      const html = cardHtml(id, live, approx);
+      m.setTooltipContent(html);
+      m.setPopupContent(html);
     });
 
     // buang marker stasiun yang hilang
@@ -137,6 +150,10 @@ export default function Peta() {
       <style>{`
         .wq-tip { background: transparent !important; border: none !important; box-shadow: none !important; padding: 0 !important; }
         .wq-tip .leaflet-tooltip-tip, .wq-tip::before { display: none !important; }
+        .cards-hidden .wq-tip { display: none !important; }
+        .wq-pop .leaflet-popup-content-wrapper { background: transparent; box-shadow: none; }
+        .wq-pop .leaflet-popup-content { margin: 0; }
+        .wq-pop .leaflet-popup-tip { display: none; }
         .wq-card { background: rgba(11,42,74,.92); border: 1px solid #1e63a8; border-radius: 10px;
           padding: 7px 10px; color: #dbeafe; font-size: 11px; line-height: 1.55; min-width: 148px;
           box-shadow: 0 6px 18px rgba(0,0,0,.45); }
@@ -152,6 +169,10 @@ export default function Peta() {
         ref={elRef}
         style={{ height: "calc(100vh - 130px)", width: "100%", borderRadius: 12, overflow: "hidden", background: "#0f172a" }}
       />
+
+      <div className="absolute top-3 right-3 z-[500] bg-slate-900/85 border border-slate-700 rounded-lg px-3 py-2 text-[11px] text-slate-300 pointer-events-none">
+        Perbesar peta (zoom ≥ {CARD_ZOOM}) untuk melihat kartu tiap stasiun, atau klik titiknya.
+      </div>
 
       {DUMMY_SPREAD && (
         <div className="absolute bottom-3 left-3 z-[500] bg-slate-900/92 border border-amber-700/60 rounded-lg p-3 text-xs max-w-[300px]">

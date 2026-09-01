@@ -60065,6 +60065,7 @@ const L$1 = /* @__PURE__ */ getDefaultExportFromCjs(leafletSrcExports);
 const ROOT = "monitoring/telemetri";
 const CENTER = [-7.75, 112.4];
 const ZOOM = 8;
+const CARD_ZOOM = 11;
 const FRESH_MS = 15 * 60 * 1e3;
 const COORDS = {
   // "awlr13063l": [-7.98, 112.63],
@@ -60123,6 +60124,11 @@ function Peta() {
     ).addTo(map2);
     layerRef.current = L$1.layerGroup().addTo(map2);
     mapRef.current = map2;
+    const applyZoomClass = () => {
+      elRef.current?.classList.toggle("cards-hidden", map2.getZoom() < CARD_ZOOM);
+    };
+    map2.on("zoomend", applyZoomClass);
+    applyZoomClass();
     setTimeout(() => map2.invalidateSize(), 100);
     return () => map2.remove();
   }, []);
@@ -60158,13 +60164,16 @@ function Peta() {
       if (!m) {
         m = L$1.circleMarker([lat, lon], { radius: 7, color: stroke, fillColor: fill, fillOpacity: 1, weight: 2 });
         m.bindTooltip("", { permanent: true, direction: "top", className: "wq-tip", offset: [0, -8], interactive: true });
+        m.bindPopup("", { className: "wq-pop", closeButton: false });
         m.addTo(lg);
         markers.set(id, m);
       } else {
         m.setLatLng([lat, lon]);
         m.setStyle({ color: stroke, fillColor: fill });
       }
-      m.setTooltipContent(cardHtml(id, live, approx));
+      const html = cardHtml(id, live, approx);
+      m.setTooltipContent(html);
+      m.setPopupContent(html);
     });
     for (const [id, m] of markers) {
       if (!seen.has(id)) {
@@ -60185,6 +60194,10 @@ function Peta() {
     /* @__PURE__ */ jsxRuntimeExports.jsx("style", { children: `
         .wq-tip { background: transparent !important; border: none !important; box-shadow: none !important; padding: 0 !important; }
         .wq-tip .leaflet-tooltip-tip, .wq-tip::before { display: none !important; }
+        .cards-hidden .wq-tip { display: none !important; }
+        .wq-pop .leaflet-popup-content-wrapper { background: transparent; box-shadow: none; }
+        .wq-pop .leaflet-popup-content { margin: 0; }
+        .wq-pop .leaflet-popup-tip { display: none; }
         .wq-card { background: rgba(11,42,74,.92); border: 1px solid #1e63a8; border-radius: 10px;
           padding: 7px 10px; color: #dbeafe; font-size: 11px; line-height: 1.55; min-width: 148px;
           box-shadow: 0 6px 18px rgba(0,0,0,.45); }
@@ -60202,6 +60215,11 @@ function Peta() {
         style: { height: "calc(100vh - 130px)", width: "100%", borderRadius: 12, overflow: "hidden", background: "#0f172a" }
       }
     ),
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "absolute top-3 right-3 z-[500] bg-slate-900/85 border border-slate-700 rounded-lg px-3 py-2 text-[11px] text-slate-300 pointer-events-none", children: [
+      "Perbesar peta (zoom ≥ ",
+      CARD_ZOOM,
+      ") untuk melihat kartu tiap stasiun, atau klik titiknya."
+    ] }),
     /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "absolute bottom-3 left-3 z-[500] bg-slate-900/92 border border-amber-700/60 rounded-lg p-3 text-xs max-w-[300px]", children: [
       /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "font-semibold text-amber-400 mb-1", children: "Posisi marker masih perkiraan (dummy)" }),
       /* @__PURE__ */ jsxRuntimeExports.jsxs("p", { className: "text-slate-400", children: [

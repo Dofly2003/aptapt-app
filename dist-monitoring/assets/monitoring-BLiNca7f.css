@@ -2754,6 +2754,9 @@ video {
 .bg-slate-900\/80 {
   background-color: rgb(15 23 42 / 0.8);
 }
+.bg-slate-900\/85 {
+  background-color: rgb(15 23 42 / 0.85);
+}
 .bg-slate-950 {
   --tw-bg-opacity: 1;
   background-color: rgb(2 6 23 / var(--tw-bg-opacity));
