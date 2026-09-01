@@ -60065,7 +60065,7 @@ const L$1 = /* @__PURE__ */ getDefaultExportFromCjs(leafletSrcExports);
 const ROOT = "monitoring/telemetri";
 const CENTER = [-7.6, 112.3];
 const ZOOM = 8;
-const CARD_ZOOM = 8;
+const CARD_ZOOM = 7;
 const FRESH_MS = 15 * 60 * 1e3;
 const SLOTS = [
   { name: "ST-01", at: [-6.708, 111.341] },
@@ -60109,20 +60109,6 @@ const SLOTS = [
   { name: "ST-20", at: [-8.12, 114.39] }
   // Banyuwangi Utara / Ketapang
 ];
-const JAVA = { latMin: -8.4, latMax: -6.3, lonMin: 106, lonMax: 114.3 };
-function hashCoord(id) {
-  let a2 = 7, b = 13;
-  for (let i = 0; i < id.length; i++) {
-    a2 = a2 * 31 + id.charCodeAt(i) >>> 0;
-    b = b * 131 + id.charCodeAt(i) * 7 >>> 0;
-  }
-  return [
-    JAVA.latMin + a2 % 1e4 / 1e4 * (JAVA.latMax - JAVA.latMin),
-    JAVA.lonMin + b % 1e4 / 1e4 * (JAVA.lonMax - JAVA.lonMin)
-  ];
-}
-const LAT_KEYS = ["lat", "latitude", "gpsLat", "Lat"];
-const LON_KEYS = ["lon", "lng", "long", "longitude", "gpsLon", "Lng"];
 const LEVEL_KEYS = ["wlevel", "water_level", "level", "level_cm", "tma"];
 const numOr = (v) => v != null && Number.isFinite(Number(v)) ? Number(v) : null;
 const pick = (obj, keys) => {
@@ -60150,7 +60136,7 @@ function cardHtml(name2, live, approx) {
       ${row("💧", "Water Level", lvl == null ? "– m" : lvl.toFixed(2) + " m")}
       ${row("⚡", "Tegangan Panel", v == null ? "– V" : v.toFixed(1) + " V")}
       ${row("🟢", "Kualitas Air", ph == null || ph === 0 ? "–" : "pH " + ph.toFixed(1))}
-      ${approx ? '<div class="wq-approx">◦ posisi perkiraan</div>' : ""}
+      ${""}
     </div>`;
 }
 function Peta() {
@@ -60183,21 +60169,12 @@ function Peta() {
     const markers = markersRef.current;
     const pts = [];
     const seen = /* @__PURE__ */ new Set();
-    const entries = Object.entries(stations).filter(([, node]) => node?.live).sort(([a2], [b]) => a2.localeCompare(b));
+    const entries = Object.entries(stations).filter(([, node]) => node?.live).sort(([a2], [b]) => a2.localeCompare(b)).slice(0, SLOTS.length);
     entries.forEach(([id, node], idx) => {
       const live = node.live;
-      let lat = pick(live, LAT_KEYS);
-      let lon = pick(live, LON_KEYS);
-      let approx = false;
-      let name2 = SLOTS[idx]?.name || id.slice(0, 8) + "…";
-      if (lat == null || lon == null) {
-        if (SLOTS[idx]) {
-          [lat, lon] = SLOTS[idx].at;
-        } else {
-          [lat, lon] = hashCoord(id);
-          approx = true;
-        }
-      }
+      const slot = SLOTS[idx];
+      const name2 = slot.name;
+      let [lat, lon] = slot.at;
       seen.add(id);
       pts.push([lat, lon]);
       const online = Date.now() - (live.ts || 0) < FRESH_MS;
@@ -60214,7 +60191,7 @@ function Peta() {
         m.setLatLng([lat, lon]);
         m.setStyle({ color: stroke, fillColor: fill });
       }
-      const html = cardHtml(name2, live, approx);
+      const html = cardHtml(name2, live);
       m.setTooltipContent(html);
       m.setPopupContent(html);
     });

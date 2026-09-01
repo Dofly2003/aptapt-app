@@ -6,7 +6,7 @@ import { subscribe } from "../lib/rtdb";
 const ROOT = "monitoring/telemetri";
 const CENTER = [-7.6, 112.3];
 const ZOOM = 8;
-const CARD_ZOOM = 8; // kartu tampil permanen mulai zoom ini ke atas
+const CARD_ZOOM = 7; // kartu tampil permanen mulai zoom ini ke atas
 const FRESH_MS = 15 * 60 * 1000;
 
 /* Koordinat stasiun ST-01..ST-20 (dari lapangan). Stasiun diurutkan by
@@ -34,22 +34,6 @@ const SLOTS = [
   { name: "ST-20", at: [-8.120, 114.390] }, // Banyuwangi Utara / Ketapang
 ];
 
-/* Stasiun ke-21+ (di luar slot) disebar acak-deterministik di Jawa. */
-const JAVA = { latMin: -8.4, latMax: -6.3, lonMin: 106.0, lonMax: 114.3 };
-function hashCoord(id) {
-  let a = 7, b = 13;
-  for (let i = 0; i < id.length; i++) {
-    a = (a * 31 + id.charCodeAt(i)) >>> 0;
-    b = (b * 131 + id.charCodeAt(i) * 7) >>> 0;
-  }
-  return [
-    JAVA.latMin + ((a % 10000) / 10000) * (JAVA.latMax - JAVA.latMin),
-    JAVA.lonMin + ((b % 10000) / 10000) * (JAVA.lonMax - JAVA.lonMin),
-  ];
-}
-
-const LAT_KEYS = ["lat", "latitude", "gpsLat", "Lat"];
-const LON_KEYS = ["lon", "lng", "long", "longitude", "gpsLon", "Lng"];
 const LEVEL_KEYS = ["wlevel", "water_level", "level", "level_cm", "tma"];
 
 const numOr = (v) => (v != null && Number.isFinite(Number(v)) ? Number(v) : null);
@@ -123,21 +107,18 @@ export default function Peta() {
     const seen = new Set();
 
     // urutkan stasiun stabil -> slot ST-01, ST-02, ...
+    // HANYA 20 stasiun pertama yang diplot (sesuai koordinat lapangan).
     const entries = Object.entries(stations)
       .filter(([, node]) => node?.live)
-      .sort(([a], [b]) => a.localeCompare(b));
+      .sort(([a], [b]) => a.localeCompare(b))
+      .slice(0, SLOTS.length);
 
     entries.forEach(([id, node], idx) => {
       const live = node.live;
-      let lat = pick(live, LAT_KEYS);
-      let lon = pick(live, LON_KEYS);
-      let approx = false;
-      let name = SLOTS[idx]?.name || id.slice(0, 8) + "…";
-
-      if (lat == null || lon == null) {
-        if (SLOTS[idx]) { [lat, lon] = SLOTS[idx].at; } // koordinat lapangan
-        else { [lat, lon] = hashCoord(id); approx = true; } // stasiun ke-21+
-      }
+      const slot = SLOTS[idx];
+      const name = slot.name;
+      let [lat, lon] = slot.at; // selalu pakai koordinat lapangan
+      const approx = false;
       seen.add(id);
       pts.push([lat, lon]);
 
