@@ -60070,6 +60070,19 @@ const COORDS = {
   // "awlr13063l": [-7.98, 112.63],
   // "278e44482bc0cd4255e21ee1a4c4e6e5": [-7.62, 112.19],
 };
+const DUMMY_SPREAD = true;
+const JATIM = { latMin: -8.55, latMax: -7.05, lonMin: 111.3, lonMax: 114.2 };
+function hashCoord(id) {
+  let a2 = 7, b = 13;
+  for (let i = 0; i < id.length; i++) {
+    a2 = a2 * 31 + id.charCodeAt(i) >>> 0;
+    b = b * 131 + id.charCodeAt(i) * 7 >>> 0;
+  }
+  return [
+    JATIM.latMin + a2 % 1e4 / 1e4 * (JATIM.latMax - JATIM.latMin),
+    JATIM.lonMin + b % 1e4 / 1e4 * (JATIM.lonMax - JATIM.lonMin)
+  ];
+}
 const LAT_KEYS = ["lat", "latitude", "gpsLat", "Lat"];
 const LON_KEYS = ["lon", "lng", "long", "longitude", "gpsLon", "Lng"];
 const LEVEL_KEYS = ["wlevel", "water_level", "level", "level_cm", "tma", "elevation"];
@@ -60081,7 +60094,7 @@ const pick = (obj, keys) => {
   }
   return null;
 };
-function cardHtml(id, live) {
+function cardHtml(id, live, approx) {
   const lvl = pick(live, LEVEL_KEYS);
   const v = numOr(live?.vcc);
   const stale = Date.now() - (live?.ts || 0) > FRESH_MS;
@@ -60091,6 +60104,7 @@ function cardHtml(id, live) {
       <div class="wq-row"><span>💧</span> Water Level: <b>${lvl == null ? "– " : lvl.toFixed(2) + " "}</b>${lvl == null ? "m" : "cm"}</div>
       <div class="wq-row"><span>⚡</span> Tegangan: <b>${v == null ? "– " : v.toFixed(1) + " "}</b>V</div>
       <div class="wq-row wq-time"><span>🕓</span> ${live?.terminalTime || "—"}</div>
+      ${approx ? '<div class="wq-approx">◦ posisi perkiraan</div>' : ""}
     </div>`;
 }
 function Peta() {
@@ -60122,20 +60136,27 @@ function Peta() {
       if (!live) return;
       let lat = pick(live, LAT_KEYS);
       let lon = pick(live, LON_KEYS);
+      let approx = false;
       if ((lat == null || lon == null) && COORDS[id]) [lat, lon] = COORDS[id];
+      if ((lat == null || lon == null) && DUMMY_SPREAD) {
+        [lat, lon] = hashCoord(id);
+        approx = true;
+      }
       if (lat == null || lon == null) {
         missing.push(id);
         return;
       }
       pts.push([lat, lon]);
       const online = Date.now() - (live.ts || 0) < FRESH_MS;
+      const mColor = approx ? "#f59e0b" : online ? "#38bdf8" : "#64748b";
+      const mFill = approx ? "#f59e0b" : online ? "#0ea5e9" : "#475569";
       L$1.circleMarker([lat, lon], {
         radius: 7,
-        color: online ? "#38bdf8" : "#64748b",
-        fillColor: online ? "#0ea5e9" : "#475569",
+        color: mColor,
+        fillColor: mFill,
         fillOpacity: 1,
         weight: 2
-      }).bindTooltip(cardHtml(id, live), {
+      }).bindTooltip(cardHtml(id, live, approx), {
         permanent: true,
         direction: "top",
         className: "wq-tip",
@@ -60163,6 +60184,7 @@ function Peta() {
         .wq-row b { color: #f8fafc; font-weight: 700; }
         .wq-row span { opacity: .8; }
         .wq-time { color: #93c5fd; }
+        .wq-approx { margin-top: 3px; color: #fbbf24; font-size: 10px; }
       ` }),
     /* @__PURE__ */ jsxRuntimeExports.jsx(
       "div",
@@ -60171,25 +60193,21 @@ function Peta() {
         style: { height: "calc(100vh - 130px)", width: "100%", borderRadius: 12, overflow: "hidden", background: "#0f172a" }
       }
     ),
-    noCoord.length > 0 && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "absolute bottom-3 left-3 z-[500] bg-slate-900/92 border border-slate-700 rounded-lg p-3 text-xs max-w-[280px]", children: [
-      /* @__PURE__ */ jsxRuntimeExports.jsxs("p", { className: "font-semibold text-amber-400 mb-1", children: [
-        noCoord.length,
-        " stasiun belum ada koordinat"
-      ] }),
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "absolute bottom-3 left-3 z-[500] bg-slate-900/92 border border-amber-700/60 rounded-lg p-3 text-xs max-w-[300px]", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "font-semibold text-amber-400 mb-1", children: "Posisi marker masih perkiraan (dummy)" }),
       /* @__PURE__ */ jsxRuntimeExports.jsxs("p", { className: "text-slate-400", children: [
-        "Isi ",
+        "Stasiun disebar acak di area Jawa Timur. Isi koordinat asli di ",
         /* @__PURE__ */ jsxRuntimeExports.jsx("code", { children: "COORDS" }),
-        " di ",
+        " pada ",
         /* @__PURE__ */ jsxRuntimeExports.jsx("code", { children: "Peta.jsx" }),
         " (",
-        /* @__PURE__ */ jsxRuntimeExports.jsx("code", { children: '"id": [lat, lng]' }),
-        "), atau alat mengirim field ",
-        /* @__PURE__ */ jsxRuntimeExports.jsx("code", { children: "lat" }),
-        "/",
-        /* @__PURE__ */ jsxRuntimeExports.jsx("code", { children: "lon" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("code", { children: '"idStation": [lat, lng]' }),
+        "), lalu set ",
+        /* @__PURE__ */ jsxRuntimeExports.jsx("code", { children: "DUMMY_SPREAD = false" }),
         "."
       ] })
-    ] })
+    ] }),
+    !DUMMY_SPREAD
   ] });
 }
 function Shell({ children }) {
