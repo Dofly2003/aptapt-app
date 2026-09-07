@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
-import { db, storage } from "../../firebase/config";
+import { db } from "../../firebase/config";
 import { doc, getDoc, addDoc, collection, serverTimestamp } from "firebase/firestore";
-import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
+import { uploadRekrutmenFile } from "../../firebase/secureStorage";
 import {
   CheckCircle2, Loader2, AlertCircle, Upload, X,
   Briefcase, Calendar, Building2, Users, ShieldCheck, FileText, Image, Video,
@@ -213,10 +213,9 @@ export default function FormLamaran() {
           if (!file && field.required) throw new Error(`File "${field.label}" wajib diisi.`);
           if (file) {
             setUploadProgress(p => ({ ...p, [field.id]: true }));
-            const storageRef = ref(storage, `rekrutmen/${id}/${Date.now()}_${field.id}_${file.name}`);
-            await uploadBytes(storageRef, file);
-            const url = await getDownloadURL(storageRef);
-            submissionValues[field.id] = { url, name: file.name, type: file.type };
+            const path = `rekrutmen/${id}/${Date.now()}_${field.id}_${file.name}`;
+            await uploadRekrutmenFile(path, file, file.type);
+            submissionValues[field.id] = { path, name: file.name, type: file.type };
             setUploadProgress(p => ({ ...p, [field.id]: false }));
           }
         } else {

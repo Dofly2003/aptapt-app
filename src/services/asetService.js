@@ -1,9 +1,9 @@
-import { db, storage } from "../firebase/config";
+import { db } from "../firebase/config";
 import {
   collection, doc, getDocs, getDoc, addDoc, updateDoc, deleteDoc,
   serverTimestamp, query, orderBy,
 } from "firebase/firestore";
-import { ref, uploadBytes, getDownloadURL, deleteObject } from "firebase/storage";
+import { uploadViaPresign, deleteRemote } from "../firebase/secureStorage";
 import imageCompression from "browser-image-compression";
 
 export function formatRupiah(n) {
@@ -71,22 +71,18 @@ export async function removeAlatKerja(id) {
 export async function uploadAlatFoto(file, docId) {
   const compressed = await imageCompression(file, { maxSizeMB: 0.5, maxWidthOrHeight: 1200, useWebWorker: false });
   const path = `alatKerja/${docId}/foto_${Date.now()}.jpg`;
-  const r = ref(storage, path);
-  await uploadBytes(r, compressed);
-  const url = await getDownloadURL(r);
-  return { url, path };
+  await uploadViaPresign(path, compressed, "image/jpeg");
+  return { url: "", path }; // privat -> render pakai path via useSecurePhotoUrls
 }
 export async function uploadSertifKalibrasi(file, docId) {
   const compressed = await imageCompression(file, { maxSizeMB: 1, maxWidthOrHeight: 1600, useWebWorker: false });
   const path = `alatKerja/${docId}/kalibrasi_${Date.now()}.jpg`;
-  const r = ref(storage, path);
-  await uploadBytes(r, compressed);
-  const url = await getDownloadURL(r);
-  return { url, path };
+  await uploadViaPresign(path, compressed, "image/jpeg");
+  return { url: "", path };
 }
 export async function deleteAlatFoto(path) {
   if (!path) return;
-  try { await deleteObject(ref(storage, path)); } catch {}
+  try { await deleteRemote(path); } catch {}
 }
 
 // ── Work Order Aset ────────────────────────────────────────────────────

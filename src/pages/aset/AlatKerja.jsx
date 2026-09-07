@@ -7,6 +7,7 @@ import {
   getAllAlatKerja, createAlatKerja, updateAlatKerja, removeAlatKerja,
   uploadAlatFoto, uploadSertifKalibrasi, deleteAlatFoto,
 } from "../../services/asetService";
+import { useSecurePhotoUrls } from "../../hooks/useSecurePhotoUrls";
 
 const EMPTY = {
   kodeAlat: "", namaAlat: "", tipeAlat: "", kategori: "", jumlah: "", satuan: "pcs",
@@ -55,6 +56,7 @@ export default function AlatKerja() {
   const fileRef       = useRef(null);
   const sertifRef     = useRef(null);
   const { show, Toast } = useToast();
+  const photoUrls = useSecurePhotoUrls(items.flatMap(i => [i.fotoPath, i.sertifKalibrasiPath]));
 
   const load = async () => {
     setLoading(true);
@@ -73,8 +75,8 @@ export default function AlatKerja() {
   };
   const openEdit = (item) => {
     setEditing(item); setForm({ ...item });
-    setFotoPreview(item.fotoUrl || ""); setFotoFile(null);
-    setSertifPreview(item.sertifKalibrasiUrl || ""); setSertifFile(null);
+    setFotoPreview(photoUrls[item.fotoPath] || item.fotoUrl || ""); setFotoFile(null);
+    setSertifPreview(photoUrls[item.sertifKalibrasiPath] || item.sertifKalibrasiUrl || ""); setSertifFile(null);
     setModal(true);
   };
   const closeModal = () => {
@@ -232,16 +234,19 @@ export default function AlatKerja() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {filtered.map(item => (
+                {filtered.map(item => {
+                  const fotoSrc = photoUrls[item.fotoPath] || item.fotoUrl;
+                  const sertifSrc = photoUrls[item.sertifKalibrasiPath] || item.sertifKalibrasiUrl;
+                  return (
                   <tr key={item.id} className="hover:bg-slate-50">
                     <td className="px-4 py-3 font-mono text-xs text-slate-500">{item.kodeAlat || "-"}</td>
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-2">
-                        {item.fotoUrl ? (
+                        {fotoSrc ? (
                           <div className="relative group shrink-0">
-                            <img src={item.fotoUrl} alt="" className="w-8 h-8 rounded-lg object-cover border border-slate-200" />
+                            <img src={fotoSrc} alt="" className="w-8 h-8 rounded-lg object-cover border border-slate-200" />
                             <button
-                              onClick={() => downloadFile(item.fotoUrl, `foto_${item.kodeAlat || item.namaAlat}.jpg`)}
+                              onClick={() => downloadFile(fotoSrc, `foto_${item.kodeAlat || item.namaAlat}.jpg`)}
                               title="Unduh foto"
                               className="absolute inset-0 rounded-lg bg-black/50 text-white items-center justify-center hidden group-hover:flex"
                             >
@@ -264,14 +269,14 @@ export default function AlatKerja() {
                       {item.tanggalKalibrasi ? (
                         <div className="flex flex-col items-center gap-1">
                           <span className="text-xs text-slate-600">{item.tanggalKalibrasi}</span>
-                          {item.sertifKalibrasiUrl && (
+                          {sertifSrc && (
                             <div className="flex items-center gap-1">
-                              <a href={item.sertifKalibrasiUrl} target="_blank" rel="noopener noreferrer"
+                              <a href={sertifSrc} target="_blank" rel="noopener noreferrer"
                                 className="inline-flex items-center gap-1 text-xs text-blue-600 hover:underline">
                                 <FileCheck className="w-3 h-3" /> Lihat
                               </a>
                               <button
-                                onClick={() => downloadFile(item.sertifKalibrasiUrl, `sertif_${item.kodeAlat || item.namaAlat}.jpg`)}
+                                onClick={() => downloadFile(sertifSrc, `sertif_${item.kodeAlat || item.namaAlat}.jpg`)}
                                 title="Unduh sertifikat"
                                 className="p-0.5 text-slate-400 hover:text-blue-600 transition-colors"
                               >
@@ -298,7 +303,8 @@ export default function AlatKerja() {
                       </div>
                     </td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -323,9 +329,9 @@ export default function AlatKerja() {
               <div className="relative w-full h-40 rounded-xl overflow-hidden border border-slate-200">
                 <img src={fotoPreview} alt="preview" className="w-full h-full object-cover" />
                 <div className="absolute top-2 right-2 flex gap-1.5">
-                  {form.fotoUrl && (
+                  {fotoPreview && (
                     <button type="button"
-                      onClick={() => downloadFile(form.fotoUrl, `foto_${form.kodeAlat || form.namaAlat}.jpg`)}
+                      onClick={() => downloadFile(fotoPreview, `foto_${form.kodeAlat || form.namaAlat}.jpg`)}
                       title="Unduh foto"
                       className="p-1 bg-black/50 text-white rounded-lg hover:bg-black/70">
                       <Download className="w-3.5 h-3.5" />
@@ -407,9 +413,9 @@ export default function AlatKerja() {
                   <div className="relative w-full h-24 rounded-xl overflow-hidden border border-slate-200">
                     <img src={sertifPreview} alt="sertif" className="w-full h-full object-cover" />
                     <div className="absolute top-1.5 right-1.5 flex gap-1">
-                      {form.sertifKalibrasiUrl && (
+                      {sertifPreview && (
                         <button type="button"
-                          onClick={() => downloadFile(form.sertifKalibrasiUrl, `sertif_${form.kodeAlat || form.namaAlat}.jpg`)}
+                          onClick={() => downloadFile(sertifPreview, `sertif_${form.kodeAlat || form.namaAlat}.jpg`)}
                           title="Unduh sertifikat"
                           className="p-1 bg-black/50 text-white rounded-lg hover:bg-black/70">
                           <Download className="w-3 h-3" />

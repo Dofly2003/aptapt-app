@@ -3,8 +3,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { Save, Smartphone, Upload, CheckCircle2, AlertCircle } from 'lucide-react';
-import { ref as storageRef, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
-import { storage } from '../../firebase/config';
+import { uploadViaPresignWithProgress, publicUrl } from '../../firebase/secureStorage';
 
 import { getSettings, updateSettings, DEFAULT_SETTINGS } from '../../services/contentService';
 import { invalidateContent } from '../../hooks/useContent';
@@ -160,8 +159,7 @@ function Card({ title, children }) {
 }
 
 const APK_STORAGE_PATH = 'downloads/app-adytia-latest.apk';
-const APK_DOWNLOAD_URL =
-  'https://firebasestorage.googleapis.com/v0/b/adytia-pt.firebasestorage.app/o/downloads%2Fapp-adytia-latest.apk?alt=media';
+const APK_DOWNLOAD_URL = publicUrl(APK_STORAGE_PATH);
 
 function ApkUploadCard() {
   const inputRef = useRef(null);
@@ -183,21 +181,20 @@ function ApkUploadCard() {
     setErrorMsg('');
   };
 
-  const handleUpload = () => {
+  const handleUpload = async () => {
     if (!file) return;
-    const ref = storageRef(storage, APK_STORAGE_PATH);
-    const task = uploadBytesResumable(ref, file, {
-      contentType: 'application/vnd.android.package-archive',
-      cacheControl: 'public, max-age=3600',
-    });
     setStatus('uploading');
     setProgress(0);
-    task.on(
-      'state_changed',
-      (snap) => setProgress(Math.round((snap.bytesTransferred / snap.totalBytes) * 100)),
-      () => { setStatus('error'); setErrorMsg('Upload gagal, coba lagi.'); },
-      () => { setStatus('success'); setFile(null); },
-    );
+    try {
+      await uploadViaPresignWithProgress(
+        APK_STORAGE_PATH, file, 'application/vnd.android.package-archive', setProgress,
+      );
+      setStatus('success');
+      setFile(null);
+    } catch {
+      setStatus('error');
+      setErrorMsg('Upload gagal, coba lagi.');
+    }
   };
 
   return (

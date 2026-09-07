@@ -7,9 +7,9 @@ import { useSettings } from '../../hooks/useContent';
 import { auth } from '../../firebase/config';
 import { signOut } from 'firebase/auth';
 import { AuthContext } from '../../context/AuthContext';
+import { publicUrl } from '../../firebase/secureStorage';
 
-const APK_URL =
-  'https://firebasestorage.googleapis.com/v0/b/adytia-pt.firebasestorage.app/o/downloads%2Fapp-adytia-latest.apk?alt=media';
+const APK_URL = publicUrl('downloads/app-adytia-latest.apk');
 
 const NAV_LINKS = [
   { label: 'Beranda', href: '#hero' },

@@ -2,18 +2,24 @@ import { useState, useEffect } from "react";
 import {
   collection, getDocs, addDoc, updateDoc, deleteDoc, doc, serverTimestamp,
 } from "firebase/firestore";
-import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
-import { db, storage } from "../../firebase/config";
+import { uploadViaPresign, publicUrl } from "../../firebase/secureStorage";
+import { db } from "../../firebase/config";
 import {
   AdminPageHeader, Button, Input, Field, Modal, useToast,
 } from "../../components/admin/AdminUI";
 import { Plus, Pencil, Trash2, Building2, Upload, X } from "lucide-react";
+import imageCompression from "browser-image-compression";
 
 /* ─── upload helper ──────────────────────────────────────────────────────── */
 async function uploadFile(file, path) {
-  const storageRef = ref(storage, path);
-  await uploadBytes(storageRef, file);
-  return getDownloadURL(storageRef);
+  // Normalisasi ke JPEG — server hanya menerima image/(jpeg|png|webp), dan
+  // tipe asli file (mis. gif/bmp) tidak selalu cocok dengan Content-Type
+  // yang dikirim ke MinIO kalau dipakai apa adanya.
+  const compressed = await imageCompression(file, {
+    maxSizeMB: 0.5, maxWidthOrHeight: 1200, useWebWorker: false, fileType: "image/jpeg",
+  });
+  await uploadViaPresign(path, compressed, "image/jpeg");
+  return publicUrl(path);
 }
 
 /* ─── small image preview / upload control ──────────────────────────────── */

@@ -11,6 +11,7 @@ import {
   getAllRekrutmen, createRekrutmen, updateRekrutmen, removeRekrutmen,
   updateRekrutmenForm, getSubmissionsByRekrutmen, removeSubmission,
 } from "../../services/sdmService";
+import { presignGetOne } from "../../firebase/secureStorage";
 
 /* ─── Constants ─── */
 const EMPTY = {
@@ -324,6 +325,17 @@ function SubmissionsModal({ open, onClose, rekrutmen, toast }) {
 
   const fields = rekrutmen?.formFields || [];
 
+  // File lamaran disimpan sebagai path (privat, admin-only) — presign
+  // di-generate saat diklik (URL hanya berlaku 60 detik, tidak disimpan).
+  const openFile = async (path) => {
+    try {
+      const url = await presignGetOne(path);
+      window.open(url, "_blank", "noopener,noreferrer");
+    } catch {
+      toast("Gagal membuka file", "error");
+    }
+  };
+
   const fmtDate = (ts) => {
     if (!ts) return "-";
     const d = ts.toDate ? ts.toDate() : new Date(ts);
@@ -353,7 +365,14 @@ function SubmissionsModal({ open, onClose, rekrutmen, toast }) {
                 <div key={field.id}>
                   <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">{field.label}</p>
                   {field.type === "file" ? (
-                    val?.url ? (
+                    val?.path ? (
+                      <button type="button" onClick={() => openFile(val.path)}
+                        className="inline-flex items-center gap-1.5 text-sm text-blue-600 hover:text-blue-700 underline">
+                        <ExternalLink className="w-3.5 h-3.5" />
+                        {val.name || "Lihat file"}
+                      </button>
+                    ) : val?.url ? (
+                      // Lamaran lama (sebelum migrasi) — masih pakai URL Firebase langsung.
                       <a href={val.url} target="_blank" rel="noreferrer"
                         className="inline-flex items-center gap-1.5 text-sm text-blue-600 hover:text-blue-700 underline">
                         <ExternalLink className="w-3.5 h-3.5" />

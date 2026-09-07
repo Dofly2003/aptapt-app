@@ -38,6 +38,45 @@ export async function uploadViaPresign(path, blob, contentType) {
   return path;
 }
 
+// Sama seperti uploadViaPresign, tapi pakai XHR supaya bisa laporkan progres
+// (fetch tidak punya event upload progress) — untuk file besar (mis. APK).
+export async function uploadViaPresignWithProgress(path, blob, contentType, onProgress) {
+  const data = await authedFetch("/storage/upload-url", { path, contentType });
+  await new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open("PUT", data.url);
+    xhr.setRequestHeader("Content-Type", contentType);
+    xhr.upload.onprogress = (e) => {
+      if (e.lengthComputable && onProgress) onProgress(Math.round((e.loaded / e.total) * 100));
+    };
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) resolve();
+      else reject(new Error(`Upload MinIO gagal (${xhr.status})`));
+    };
+    xhr.onerror = () => reject(new Error("Upload MinIO gagal (koneksi terputus)"));
+    xhr.send(blob);
+  });
+  return path;
+}
+
+// Upload rekrutmen/ — pelamar TIDAK login, jadi tidak pakai authedFetch
+// (tanpa Firebase ID Token). Proteksi di sisi server: rate-limit per-IP +
+// validasi path/tipe/ukuran.
+export async function uploadRekrutmenFile(path, blob, contentType) {
+  const res = await fetch(`${API_BASE}/storage/rekrutmen-upload-url`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ path, contentType, size: blob.size }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || `Gagal menyiapkan upload (${res.status})`);
+  const putRes = await fetch(data.url, {
+    method: "PUT", body: blob, headers: { "Content-Type": contentType },
+  });
+  if (!putRes.ok) throw new Error(`Upload gagal (${putRes.status})`);
+  return path;
+}
+
 // cache in-memory: path -> { url, exp }
 const _cache = new Map();
 const SKEW_MS = 5 * 60 * 1000;

@@ -1,6 +1,66 @@
 STATUS MIGRASI FIREBASE STORAGE -> MINIO
 PT Adytia Putra Tehnik - dashboard
-Update: 30 Agustus 2026
+Update: 7 September 2026
+
+==============================================================
+SELESAI HARI INI (7 Sept) — lanjutan sesi 30 Agustus
+==============================================================
+
+Prefix baru yang dimigrasi (kode sudah tidak pakai firebase/storage):
+
+6. lembaga_lit/ - PUBLIK-BACA (bucket policy MinIO, sama seperti instansi/),
+                  tulis: admin. Dipakai LembagaLIT.jsx (logo/stempel/TTD LIT).
+                  Sekarang dinormalisasi ke JPEG (browser-image-compression)
+                  sebelum upload — sebelumnya upload apa adanya.
+7. alatKerja/    - PRIVAT (presigned read, isActiveUser), tulis: admin.
+                  Dipakai asetService.js (foto alat + sertifikat kalibrasi),
+                  dirender di AlatKerja.jsx & MobileAlatKerja.jsx pakai
+                  useSecurePhotoUrls (pola sama seperti StokBarang.jsx).
+8. downloads/    - PUBLIK-BACA, tulis: admin, khusus 1 file tetap
+                  (app-adytia-latest.apk, selalu ditimpa). Upload dari
+                  SettingsPanel.jsx (ApkUploadCard) — progress bar sekarang
+                  pakai XHR (uploadViaPresignWithProgress di secureStorage.js)
+                  karena fetch() tidak punya event upload progress.
+                  Link download APK di Navbar.jsx & LandingNav.jsx diupdate
+                  dari URL Firebase hardcoded -> publicUrl() (MinIO).
+9. rekrutmen/    - PALING BEDA: pelamar upload CV/foto TANPA login sama
+                  sekali (FormLamaran.jsx, halaman publik). Endpoint baru
+                  TANPA requireAuth: POST /storage/rekrutmen-upload-url
+                  (server/index.js) — proteksi ganti dari Storage Rules jadi:
+                    - rate-limit 20x/jam PER-IP (bukan per-uid, karena tidak
+                      ada Firebase ID Token) — pakai checkRateLimit() yang
+                      sama, key-nya IP bukan uid (fungsinya generik)
+                    - app.set("trust proxy", 1) ditambahkan supaya req.ip
+                      = IP klien asli di belakang Nginx (PERLU DICEK: vhost
+                      api.pt-adytia.com sudah forward header X-Forwarded-For?
+                      biasanya default kalau pakai proxy_pass standar, belum
+                      diverifikasi eksplisit)
+                    - validasi path harus prefix "rekrutmen/", content-type
+                      & ukuran (maks 50MB) — persis whitelist storage.rules
+                      lama (image jpeg/png/webp, pdf, doc, docx — TIDAK
+                      termasuk video meski form builder rekrutmen menawarkan
+                      opsi tipe "video"; itu mismatch PRE-EXISTING di
+                      storage.rules asli, dibiarkan sama)
+                  Baca tetap admin-only lewat endpoint lama (/storage/file-url,
+                  /storage/list-urls) — ditambah field `readRole: "admin"`
+                  di PREFIX_RULES + pengecekan role di kedua endpoint itu
+                  (sebelumnya semua prefix baca cuma butuh "user aktif", baru
+                  kali ini ada prefix yang read-nya dibatasi admin-only).
+                  Submission lama tersimpan `{url, name, type}`, submission
+                  baru `{path, name, type}` — Rekrutmen.jsx (admin viewer)
+                  fallback ke url lama kalau path tidak ada, presign
+                  di-generate on-click (expire 60 detik, tidak disimpan).
+
+PERLU DIKERJAKAN DI VPS (belum jalan, infra saya tidak bisa akses langsung):
+- `mc anonymous set download <alias>/adytia-app/lembaga_lit`
+- `mc anonymous set download <alias>/adytia-app/downloads`
+  (instansi/ dan pengujian/ sudah public-read dari migrasi sebelumnya —
+  2 prefix baru ini juga perlu public-read policy yang sama supaya
+  publicUrl() benar-benar bisa diakses tanpa presign)
+- `git pull` + restart pm2 (`pm2 restart aptapt-storage-api`) di VPS supaya
+  server/index.js yang baru (endpoint rekrutmen + prefix baru) aktif
+- Verifikasi Nginx vhost api.pt-adytia.com forward X-Forwarded-For dengan
+  benar (dibutuhkan supaya rate-limit per-IP rekrutmen akurat)
 
 ==============================================================
 SELESAI HARI INI
@@ -70,16 +130,18 @@ BELUM DIKERJAKAN
 ==============================================================
 
 Prefix yang masih 100% di Firebase Storage (belum disentuh sama sekali):
-- laporan/        - laporan teknisi
-- rekrutmen/      - CV pelamar (upload TANPA login - butuh desain auth
-                    berbeda, lihat catatan di bawah)
-- downloads/      - distribusi APK
-- lembaga_lit/    - logo/TTD/stempel LIT
 - temp_files/     - file sementara 24 jam, hanya superadmin
-- alatKerja/      - foto alat kerja
 - pdf_temp/, pdf_converted/ - dipakai fitur convertPdfToWord (Cloud
                     Function functions/index.js) - migrasi ini butuh
                     ubah Cloud Function juga, bukan cuma frontend
+
+laporan/ di storage.rules TERNYATA DEAD CODE (ditemukan 7 Sept saat audit
+sebelum migrasi) - tidak ada kode manapun di src/ yang menulis ke path ini
+(grep firebase/storage kosong) dan bucket Firebase-nya kosong (gsutil ls
+tidak ada objek). Kemungkinan sisa dari fitur pages/laporan/* lama yang
+sudah dihapus (lihat CHANGES.md). Rule-nya dibiarkan di storage.rules
+(tidak dihapus, di luar scope sesi ini) tapi TIDAK PERLU dimigrasi -
+tidak ada yang perlu dipindah.
 
 Bug PRE-EXISTING yang ketahuan saat audit, TIDAK terkait migrasi ini,
 belum diperbaiki:
@@ -89,24 +151,25 @@ belum diperbaiki:
   storage.rules asli -> kena default-deny -> upload di kedua fitur ini
   kemungkinan besar SUDAH GAGAL dari sebelum sesi ini, tidak berkaitan
   dengan migrasi MinIO.
-
-Catatan desain untuk rekrutmen/ (kalau nanti dikerjakan): endpoint
-upload sekarang (`getSecureUploadUrl` pola) mensyaratkan login (Firebase
-ID Token). Form lamaran kerja (FormLamaran.jsx) upload TANPA login sama
-sekali - butuh jalur terpisah yang tidak wajib auth, dengan validasi
-lebih ketat (rate-limit per-IP, ukuran file, content-type) untuk
-menggantikan proteksi yang tadinya dari Firebase Storage Rules.
+- Form builder rekrutmen (Rekrutmen.jsx) menawarkan opsi tipe field
+  "video" tapi baik storage.rules asli maupun PREFIX_RULES baru di
+  server/index.js TIDAK mengizinkan video/* - upload video di form
+  lamaran kemungkinan besar selalu gagal sejak awal, tidak diperbaiki
+  di sesi ini (di luar scope migrasi storage, itu masalah desain form).
 
 ==============================================================
 DATA LAMA (FOTO/FILE) - BELUM DIMIGRASI
 ==============================================================
 
 Untuk prefix yang KODE-nya sudah pindah ke MinIO (nidi_data/, instansi/,
-pengujian/), file-file LAMA yang sudah ter-upload SEBELUM migrasi ini
-MASIH ada di Firebase Storage, dan dokumen Firestore-nya MASIH simpan
-URL Firebase lama (https://firebasestorage.googleapis.com/...). Ini
-sengaja dibuat begitu (fallback), record lama tetap tampil normal
-selama Firebase Storage belum dihapus/kena masalah kuota lagi.
+pengujian/, lembaga_lit/, alatKerja/, downloads/, rekrutmen/), file-file
+LAMA yang sudah ter-upload SEBELUM migrasi ini MASIH ada di Firebase
+Storage, dan dokumen Firestore-nya MASIH simpan URL Firebase lama
+(https://firebasestorage.googleapis.com/...). Ini sengaja dibuat begitu
+(fallback: AlatKerja.jsx/MobileAlatKerja.jsx & Rekrutmen.jsx sudah
+ditulis untuk fallback ke url/fotoUrl lama kalau path/fotoPath kosong),
+record lama tetap tampil normal selama Firebase Storage belum
+dihapus/kena masalah kuota lagi.
 
 inventori/ dan pekerjaan/ TIDAK punya data lama (sudah dicek awal
 migrasi, folder-nya kosong di Firebase Storage) - jadi 2 prefix itu

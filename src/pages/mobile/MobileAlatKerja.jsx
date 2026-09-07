@@ -5,6 +5,7 @@ import {
   getAllAlatKerja, createAlatKerja, updateAlatKerja, removeAlatKerja,
   uploadAlatFoto, uploadSertifKalibrasi, deleteAlatFoto,
 } from "../../services/asetService";
+import { useSecurePhotoUrls } from "../../hooks/useSecurePhotoUrls";
 import CameraButton from "../../components/CameraButton";
 
 const EMPTY = {
@@ -75,6 +76,8 @@ export default function MobileAlatKerja() {
     setTimeout(() => setToast({ msg: "", type: "" }), 2500);
   };
 
+  const photoUrls = useSecurePhotoUrls(items.flatMap(i => [i.fotoPath, i.sertifKalibrasiPath]));
+
   const load = async () => {
     setLoading(true);
     try { setItems(await getAllAlatKerja()); }
@@ -92,8 +95,8 @@ export default function MobileAlatKerja() {
   };
   const openEdit = (item) => {
     setEditing(item); setForm({ ...item });
-    setFotoPreview(item.fotoUrl || ""); setFotoFile(null);
-    setSertifPreview(item.sertifKalibrasiUrl || ""); setSertifFile(null);
+    setFotoPreview(photoUrls[item.fotoPath] || item.fotoUrl || ""); setFotoFile(null);
+    setSertifPreview(photoUrls[item.sertifKalibrasiPath] || item.sertifKalibrasiUrl || ""); setSertifFile(null);
     setSheet(true);
   };
   const closeSheet = () => {
@@ -229,13 +232,15 @@ export default function MobileAlatKerja() {
           <div className="space-y-2">
             {filtered.map(item => {
               const st = KONDISI_STYLE[item.kondisi] || KONDISI_STYLE.baik;
+              const fotoSrc = photoUrls[item.fotoPath] || item.fotoUrl;
+              const sertifSrc = photoUrls[item.sertifKalibrasiPath] || item.sertifKalibrasiUrl;
               return (
                 <div key={item.id} className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
-                  {item.fotoUrl && (
+                  {fotoSrc && (
                     <div className="relative">
-                      <img src={item.fotoUrl} alt={item.namaAlat} className="w-full h-32 object-cover" />
+                      <img src={fotoSrc} alt={item.namaAlat} className="w-full h-32 object-cover" />
                       <button
-                        onClick={() => downloadFile(item.fotoUrl, `foto_${item.kodeAlat || item.namaAlat}.jpg`)}
+                        onClick={() => downloadFile(fotoSrc, `foto_${item.kodeAlat || item.namaAlat}.jpg`)}
                         className="absolute top-2 right-2 p-1.5 bg-black/50 text-white rounded-xl active:scale-95 transition-transform"
                         title="Unduh foto"
                       >
@@ -263,12 +268,12 @@ export default function MobileAlatKerja() {
                         <div className="flex items-center gap-1.5 mt-1.5">
                           <FileCheck className="w-3 h-3 text-blue-500 shrink-0" />
                           <span className="text-xs text-blue-600">Kalibrasi: {item.tanggalKalibrasi}</span>
-                          {item.sertifKalibrasiUrl && (
+                          {sertifSrc && (
                             <>
-                              <a href={item.sertifKalibrasiUrl} target="_blank" rel="noopener noreferrer"
+                              <a href={sertifSrc} target="_blank" rel="noopener noreferrer"
                                 className="text-xs text-blue-500 underline">lihat</a>
                               <button
-                                onClick={() => downloadFile(item.sertifKalibrasiUrl, `sertif_${item.kodeAlat || item.namaAlat}.jpg`)}
+                                onClick={() => downloadFile(sertifSrc, `sertif_${item.kodeAlat || item.namaAlat}.jpg`)}
                                 className="text-slate-400 active:text-blue-600"
                                 title="Unduh sertifikat"
                               >

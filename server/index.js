@@ -16,6 +16,9 @@ const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || "")
   .split(",").map((s) => s.trim()).filter(Boolean);
 
 const app = express();
+// Di belakang Nginx reverse proxy — perlu ini supaya req.ip = IP klien asli
+// (dipakai rate-limit per-IP untuk endpoint rekrutmen tanpa login).
+app.set("trust proxy", 1);
 app.use(express.json());
 app.use(cors({
   origin(origin, cb) {
@@ -24,19 +27,38 @@ app.use(cors({
   },
 }));
 
+// Tipe file yang diizinkan untuk lamaran kerja (CV/foto/dokumen) — sama
+// persis dengan whitelist storage.rules asli (TIDAK termasuk video, meski
+// form builder rekrutmen menawarkan opsi tipe "video" — mismatch pre-existing
+// dari storage.rules lama, dibiarkan sama supaya tidak berubah perilaku).
+const REKRUTMEN_CONTENT_TYPES =
+  /^(image\/(jpeg|png|webp)|application\/pdf|application\/msword|application\/vnd\.openxmlformats-officedocument\.wordprocessingml\.document)$/;
+const REKRUTMEN_MAX_SIZE = 50 * 1024 * 1024;
+
 // ─── Prefix -> aturan tulis (role + tipe file yang diizinkan) ────────────────
-// Baca selalu "user aktif" untuk semua prefix di sini (prefix publik-baca
-// seperti instansi/ butuh desain terpisah, lihat catatan migrasi, belum masuk).
+// Baca selalu "user aktif" untuk semua prefix di sini kecuali readRole diisi
+// (mis. rekrutmen/ hanya admin yang boleh baca, setara isAdmin() di storage.rules).
 const PREFIX_RULES = {
   "inventori/": { writeRole: "admin", contentTypes: /^image\/(jpeg|png|webp)$/ },
   "pekerjaan/": { writeRole: "admin", contentTypes: /^image\/(jpeg|png|webp)$/ },
   "nidi_data/": { writeRole: "admin", contentTypes: /^(image\/(jpeg|png|webp)|application\/pdf)$/ },
+  "alatKerja/": { writeRole: "admin", contentTypes: /^image\/(jpeg|png|webp)$/ },
   // instansi/ publik-baca (bucket policy MinIO, bukan lewat endpoint ini) —
   // hanya jalur tulis yang lewat sini, role "editor" (admin/superadmin/editor).
   "instansi/":  { writeRole: "editor", contentTypes: /^image\/(jpeg|png|webp)$/, publicRead: true },
   // pengujian/{uid}/{docId}/... — publik-baca, tulis hanya pemilik (uid di
   // path) atau admin (setara isOwner(userId) || isAdmin() di storage.rules).
   "pengujian/": { writeRole: "owner", contentTypes: /^image\/(jpeg|png|webp)$/, publicRead: true },
+  "lembaga_lit/": { writeRole: "admin", contentTypes: /^image\/(jpeg|png|webp)$/, publicRead: true },
+  "downloads/": {
+    writeRole: "admin",
+    contentTypes: /^(application\/vnd\.android\.package-archive|application\/zip|application\/pdf)$/,
+    publicRead: true,
+  },
+  // rekrutmen/ — pelamar upload TANPA login lewat endpoint terpisah
+  // (/storage/rekrutmen-upload-url, di bawah), bukan lewat /storage/upload-url
+  // di atas. Entry ini hanya dipakai untuk baca (admin-only) & jaga-jaga delete.
+  "rekrutmen/": { writeRole: "admin", contentTypes: REKRUTMEN_CONTENT_TYPES, readRole: "admin" },
 };
 
 function getRule(path) {
@@ -135,8 +157,11 @@ app.post("/storage/list-urls", requireAuth, requireActiveUser, async (req, res) 
   const paths = Array.isArray(req.body?.paths) ? req.body.paths : [];
   if (paths.length === 0) return res.json({ urls: {} });
   if (paths.length > 200) return res.status(400).json({ error: "Maks 200 path" });
+  const role = await getUserRole(req.uid);
   const entries = await Promise.all(paths.map(async (p) => {
-    if (!getRule(p)) return [p, null];
+    const rule = getRule(p);
+    if (!rule) return [p, null];
+    if (rule.readRole === "admin" && !isAdminRole(role)) return [p, null];
     try { return [p, await presignGet(s3, p, 3600)]; } catch { return [p, null]; }
   }));
   res.json({ urls: Object.fromEntries(entries) });
@@ -147,8 +172,35 @@ app.post("/storage/file-url", requireAuth, requireActiveUser, async (req, res) =
     return res.status(429).json({ error: "Terlalu banyak permintaan, coba lagi nanti" });
   }
   const { path } = req.body || {};
-  if (!getRule(path)) return res.status(400).json({ error: "Path tidak valid" });
+  const rule = getRule(path);
+  if (!rule) return res.status(400).json({ error: "Path tidak valid" });
+  if (rule.readRole === "admin" && !isAdminRole(await getUserRole(req.uid))) {
+    return res.status(403).json({ error: "Akses ditolak" });
+  }
   const url = await presignGet(s3, path, 60);
+  res.json({ url });
+});
+
+// ─── Upload lamaran kerja (rekrutmen/) — TANPA login ─────────────────────────
+// Pelamar bukan user terdaftar, jadi tidak ada Firebase ID Token. Proteksi
+// gantinya: rate-limit per-IP + validasi path/tipe/ukuran (setara Storage
+// Rules `allow create` lama). Baca tetap admin-only lewat endpoint di atas.
+app.post("/storage/rekrutmen-upload-url", async (req, res) => {
+  const ip = req.ip || "unknown";
+  if (!(await checkRateLimit(ip, "rekrutmen_upload", 20))) {
+    return res.status(429).json({ error: "Terlalu banyak permintaan, coba lagi nanti" });
+  }
+  const { path, contentType, size } = req.body || {};
+  if (!isSafePath(path) || typeof path !== "string" || !path.startsWith("rekrutmen/")) {
+    return res.status(400).json({ error: "Path tidak valid" });
+  }
+  if (!REKRUTMEN_CONTENT_TYPES.test(contentType || "")) {
+    return res.status(400).json({ error: "Tipe file tidak valid" });
+  }
+  if (typeof size === "number" && size > REKRUTMEN_MAX_SIZE) {
+    return res.status(400).json({ error: "Ukuran file melebihi 50MB" });
+  }
+  const url = await presignPut(s3, path, contentType, 120);
   res.json({ url });
 });
 
