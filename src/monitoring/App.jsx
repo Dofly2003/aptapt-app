@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate, NavLink } from "react-router-dom";
 import PanelDaya from "./pages/PanelDaya";
+import PanelDayaApp from "./pages/PanelDayaApp";
 import Ketinggian from "./pages/Ketinggian";
 import Stasiun from "./pages/KualitasAir";
 import Peta from "./pages/Peta";
@@ -30,20 +31,30 @@ function Shell({ children }) {
   );
 }
 
+function ShellRoutes() {
+  return (
+    <Shell>
+      <Routes>
+        <Route path="/" element={<Navigate to="/peta" replace />} />
+        <Route path="/peta" element={<Peta />} />
+        <Route path="/stasiun" element={<Stasiun />} />
+        <Route path="/kualitas-air" element={<Navigate to="/stasiun" replace />} />
+        <Route path="/panel-daya" element={<PanelDaya />} />
+        <Route path="/ketinggian" element={<Ketinggian />} />
+        <Route path="*" element={<Navigate to="/peta" replace />} />
+      </Routes>
+    </Shell>
+  );
+}
+
 export default function App() {
   return (
     <BrowserRouter>
-      <Shell>
-        <Routes>
-          <Route path="/" element={<Navigate to="/peta" replace />} />
-          <Route path="/peta" element={<Peta />} />
-          <Route path="/stasiun" element={<Stasiun />} />
-          <Route path="/kualitas-air" element={<Navigate to="/stasiun" replace />} />
-          <Route path="/panel-daya" element={<PanelDaya />} />
-          <Route path="/ketinggian" element={<Ketinggian />} />
-          <Route path="*" element={<Navigate to="/peta" replace />} />
-        </Routes>
-      </Shell>
+      <Routes>
+        {/* Tampilan khusus aplikasi — tanpa header/nav desktop */}
+        <Route path="/panel-daya/app" element={<PanelDayaApp />} />
+        <Route path="*" element={<ShellRoutes />} />
+      </Routes>
     </BrowserRouter>
   );
 }

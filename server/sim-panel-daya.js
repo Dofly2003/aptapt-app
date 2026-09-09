@@ -9,6 +9,7 @@
  * Menulis ke (BYPASS rules, pakai service-account.json):
  *   monitoring/devices/{id}                       -> metadata (dibuat jika belum ada)
  *   monitoring/panel-daya/{id}/log/{tgl}/{jam}    -> riwayat (di-append) — dibaca dashboard
+ *   monitoring/panel-daya/{id}/daily/{tgl}        -> rekap harian { kWh, kVArh, peakKw } — tampilan app
  *   monitoring/panel-daya/{id}/live               -> nilai terakhir (ditimpa)
  *   monitoring/panel-daya/{id}/current|energy     -> mirror nilai terakhir
  *
@@ -172,12 +173,31 @@ async function ensureDevice(dev) {
 async function writeSample(dev, t, energy, { live }) {
   const s = sample(dev, t);
   const dtH = (live ? INTERVAL_SEC : BACKFILL_STEP) / 3600;
-  energy.kWh = r2(energy.kWh + s.pInst * dtH);
-  energy.kVArh = r2(energy.kVArh + s.qInst * dtH);
+  const dKWh = s.pInst * dtH;
+  const dKVArh = s.qInst * dtH;
+  energy.kWh = r2(energy.kWh + dKWh);
+  energy.kVArh = r2(energy.kVArh + dKVArh);
+
+  // rekap harian (dipakai tampilan app: mingguan/bulanan) — total per hari
+  // = penjumlahan delta dalam hari itu. Reset saat tanggal berganti.
+  if (!dev._day || dev._day.date !== t.date) {
+    dev._day = { date: t.date, kWh: 0, kVArh: 0, peakKw: 0 };
+  }
+  dev._day.kWh += dKWh;
+  dev._day.kVArh += dKVArh;
+  dev._day.peakKw = Math.max(dev._day.peakKw, s.pInst);
 
   const entry = { voltage: s.voltage, current: s.current, energy: { kWh: energy.kWh, kVArh: energy.kVArh } };
   const base = `monitoring/panel-daya/${dev.id}`;
-  const upd = { [`${base}/log/${t.date}/${t.time}`]: entry };
+  const upd = {
+    [`${base}/log/${t.date}/${t.time}`]: entry,
+    [`${base}/daily/${t.date}`]: {
+      kWh: r2(dev._day.kWh),
+      kVArh: r2(dev._day.kVArh),
+      peakKw: r2(dev._day.peakKw),
+      updatedAt: Date.now(),
+    },
+  };
   if (live) {
     upd[`${base}/live`] = { ...entry, ts: Date.now() };
     upd[`${base}/current`] = s.current;
