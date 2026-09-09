@@ -31,29 +31,23 @@ function Shell({ children }) {
   );
 }
 
-function ShellRoutes() {
-  return (
-    <Shell>
-      <Routes>
-        <Route path="/" element={<Navigate to="/peta" replace />} />
-        <Route path="/peta" element={<Peta />} />
-        <Route path="/stasiun" element={<Stasiun />} />
-        <Route path="/kualitas-air" element={<Navigate to="/stasiun" replace />} />
-        <Route path="/panel-daya" element={<PanelDaya />} />
-        <Route path="/ketinggian" element={<Ketinggian />} />
-        <Route path="*" element={<Navigate to="/peta" replace />} />
-      </Routes>
-    </Shell>
-  );
-}
+// Bungkus halaman dengan Shell (header + nav desktop).
+const withShell = (el) => <Shell>{el}</Shell>;
 
 export default function App() {
   return (
     <BrowserRouter>
       <Routes>
-        {/* Tampilan khusus aplikasi — tanpa header/nav desktop */}
+        {/* Tampilan khusus aplikasi — TANPA Shell. Harus sebelum "/panel-daya". */}
         <Route path="/panel-daya/app" element={<PanelDayaApp />} />
-        <Route path="*" element={<ShellRoutes />} />
+
+        <Route path="/" element={<Navigate to="/peta" replace />} />
+        <Route path="/peta" element={withShell(<Peta />)} />
+        <Route path="/stasiun" element={withShell(<Stasiun />)} />
+        <Route path="/kualitas-air" element={<Navigate to="/stasiun" replace />} />
+        <Route path="/panel-daya" element={withShell(<PanelDaya />)} />
+        <Route path="/ketinggian" element={withShell(<Ketinggian />)} />
+        <Route path="*" element={<Navigate to="/peta" replace />} />
       </Routes>
     </BrowserRouter>
   );
