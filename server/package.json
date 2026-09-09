@@ -6,7 +6,8 @@
   "main": "index.js",
   "scripts": {
     "start": "node index.js",
-    "bridge:wqms": "node bridge-wqms.js"
+    "bridge:wqms": "node bridge-wqms.js",
+    "sim:panel": "node sim-panel-daya.js"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.658.0",
