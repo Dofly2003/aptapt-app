@@ -16,12 +16,24 @@ export default function Accordion({
 }) {
   const [open, setOpen] = useState(defaultOpen);
 
+  const toggle = () => setOpen(o => !o);
+
   return (
     <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-      <button
-        type="button"
-        onClick={() => setOpen(o => !o)}
-        className="w-full flex items-center justify-between p-3 active:bg-gray-50 transition"
+      {/* role=button, bukan <button>: badge bisa berisi kontrol interaktif
+          (mis. tombol "Tukar" di foto isolasi) — <button> di dalam <button>
+          merusak DOM & bikin klik hapus foto tidak jalan. */}
+      <div
+        role="button"
+        tabIndex={0}
+        onClick={toggle}
+        onKeyDown={(e) => {
+          if (e.target === e.currentTarget && (e.key === "Enter" || e.key === " ")) {
+            e.preventDefault();
+            toggle();
+          }
+        }}
+        className="w-full flex items-center justify-between p-3 active:bg-gray-50 transition cursor-pointer select-none"
       >
         <div className="text-left">
           <div className="text-sm font-semibold text-gray-800">{title}</div>
@@ -36,7 +48,7 @@ export default function Accordion({
             className={`text-gray-400 transition-transform ${open ? "rotate-180" : ""}`}
           />
         </div>
-      </button>
+      </div>
 
       {open && (
         <div className="px-3 pb-3 border-t border-gray-50">

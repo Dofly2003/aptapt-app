@@ -21,7 +21,9 @@ const SECTIONS = [
   { code: "A.5", label: "Spesifikasi Teknik PHB TR" },
   { code: "A.6", label: "Hasil Uji Pabrik / Sertifikat Produk" },
   { code: "B.1", label: "Konstruksi" },
-  { code: "B.2", label: "Sistem Pembumian" },
+  { code: "B.2.1", label: "Sistem Pembumian — PHB TM" },
+  { code: "B.2.2", label: "Sistem Pembumian — PHB TR" },
+  { code: "B.2.3", label: "Sistem Pembumian — Trafo" },
   { code: "B.3", label: "Pengaman Elektrik" },
   { code: "B.4", label: "Pengaman Mekanik" },
   { code: "B.5", label: "Jarak Bebas (Clearance Distance)" },
@@ -38,6 +40,9 @@ const SECTIONS = [
   { code: "C.7", label: "Pengujian Fungsi PHB TM" },
   { code: "C.8", label: "Pengujian Fungsi PHB TR" },
   { code: "D",   label: "Data Hasil Uji" },
+  { code: "D.2", label: "Kesimpulan" },
+  { code: "D.3", label: "Berita Acara Pemeriksaan & Pengujian" },
+  { code: "D.4", label: "Surat Pernyataan Kesesuaian" },
   { code: "E",   label: "Rekomendasi Laik Operasi" },
 ];
 

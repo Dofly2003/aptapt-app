@@ -306,11 +306,15 @@ function contentA1(form, photos, imgMap) {
 
 // A.2 Saluran TM
 function contentA2(form, photos, imgMap) {
+  const kbl = (f) =>
+    gf(form, `part1.phb_tm.kabel_outgoing.${f}`) ||
+    gf(form, `part1.phb_tm.kabel_incoming.${f}`) ||
+    gf(form, `part1.phb_tm.kabel_sktm.${f}`);
   const rows = [
-    ["Merk",          gf(form,"part1.phb_tm.kabel_incoming.merk")        || gf(form,"part1.phb_tm.kabel_sktm.merk")],
-    ["Tipe / Jenis",  gf(form,"part1.phb_tm.kabel_incoming.tipe")        || gf(form,"part1.phb_tm.kabel_sktm.tipe")],
-    ["Ukuran",        gf(form,"part1.phb_tm.kabel_incoming.ukuran")      || gf(form,"part1.phb_tm.kabel_sktm.ukuran")],
-    ["Panjang (m)",   gf(form,"part1.phb_tm.kabel_incoming.panjang")     || gf(form,"part1.phb_tm.kabel_sktm.panjang")],
+    ["Merk",          kbl("merk")],
+    ["Tipe / Jenis",  kbl("tipe")],
+    ["Ukuran",        kbl("ukuran")],
+    ["Panjang (m)",   kbl("panjang")],
   ].filter(([, v]) => v && v !== "-");
   const items = [
     { label:"Foto Nameplate Kabel TM", url: gp(photos,"part1","phb_tm.kabel_incoming")[0] || gp(photos,"part1","phb_tm.kabel_sktm")[0] },
@@ -399,37 +403,27 @@ function contentB1(form, photos, imgMap) {
   return [photoGrid(items, imgMap) ?? para("(tidak ada foto konstruksi)")];
 }
 
-// B.2 Pembumian
-function contentB2(form, photos, imgMap) {
-  const f1 = form.part1 ?? {};
-  const rows = [
-    { nama:"Grounding Cubicle PHB TM",      tipe: f1.phb_tm?.grounding_cubicle?.tipe??"-", ukuran: f1.phb_tm?.grounding_cubicle?.ukuran??"-", nilai: f1.phb_tm?.grounding_phbtm?.nilai??"-" },
-    { nama:"Grounding LA / Arester PHB TM", tipe: f1.phb_tm?.grounding_la?.tipe??"-",      ukuran: f1.phb_tm?.grounding_la?.ukuran??"-",      nilai: f1.phb_tm?.grounding_arester?.nilai??"-" },
-    { nama:"Grounding Netral Trafo",         tipe:"-", ukuran:"-", nilai: f1.trafo?.grounding_pengukuran?.nilaiNetral??"-" },
-    { nama:"Grounding Body Trafo",           tipe:"-", ukuran:"-", nilai: f1.trafo?.grounding_pengukuran?.nilaiBody??"-" },
-    { nama:"Grounding Cubicle PHB TR",       tipe: f1.phb_tr?.grounding_cubicle?.tipe??"-", ukuran: f1.phb_tr?.grounding_cubicle?.ukuran??"-", nilai: f1.phb_tr?.grounding_phbtr?.nilai??"-" },
-  ];
-  const tbl = new Table({
-    width: { size: 100, type: WidthType.PERCENTAGE },
-    rows: [
-      new TableRow({ children: [hCell("No",{w:6}), hCell("Nama Grounding",{w:38,center:false}), hCell("Tipe",{w:16}), hCell("Ukuran (mm²)",{w:18}), hCell("Nilai (Ω)",{w:22})] }),
-      ...rows.map((r,i) => new TableRow({ children: [
-        mkCell(String(i+1), {w:6,center:true}),
-        mkCell(r.nama, {w:38}),
-        mkCell(r.tipe, {w:16,center:true}),
-        mkCell(r.ukuran, {w:18,center:true}),
-        mkCell(r.nilai, {w:22,center:true,bold:true}),
-      ]})),
-    ],
-  });
+// B.2 Sistem Pembumian — foto pembumian saja (tanpa nilai), dipecah per alat.
+// Nilai tahanan pembumian tetap di C.2 (contentC2).
+function contentB2Tm(photos, imgMap) {
   const items = [
-    { label:"Grounding Cubicle PHB TM",  url: gp(photos,"part1","phb_tm.grounding_cubicle")[0] },
-    { label:"Grounding LA / Arester TM", url: gp(photos,"part1","phb_tm.grounding_la")[0] },
-    { label:"Grounding Netral Trafo",    url: gp(photos,"part1","trafo.grounding_netral")[0] },
-    { label:"Grounding Body Trafo",      url: gp(photos,"part1","trafo.grounding_body")[0] },
-    { label:"Grounding Cubicle PHB TR",  url: gp(photos,"part1","phb_tr.grounding_cubicle")[0] },
-  ].filter(i => i.url);
-  return [tbl, spacer(), photoGrid(items, imgMap)].filter(Boolean);
+    { label:"Grounding Body Cubicle (Dalam)", url: gp(photos,"part1","phb_tm.grounding_cubicle")[0] },
+    { label:"Ground Rod Cubicle (Luar)",      url: gp(photos,"part1","phb_tm.grounding_cubicle")[1] },
+  ];
+  return [photoGrid(items, imgMap) ?? para("(tidak ada foto pembumian PHB TM)")];
+}
+function contentB2Tr(photos, imgMap) {
+  const items = [
+    { label:"Grounding PHB TR", url: gp(photos,"part1","phb_tr.grounding_cubicle")[0] },
+  ];
+  return [photoGrid(items, imgMap) ?? para("(tidak ada foto pembumian PHB TR)")];
+}
+function contentB2Trafo(photos, imgMap) {
+  const items = [
+    { label:"Grounding Netral Trafo", url: gp(photos,"part1","trafo.grounding_netral")[0] },
+    { label:"Grounding Body Trafo",   url: gp(photos,"part1","trafo.grounding_body")[0] },
+  ];
+  return [photoGrid(items, imgMap) ?? para("(tidak ada foto pembumian Trafo)")];
 }
 
 // B.3 Pengaman Elektrik
@@ -569,18 +563,20 @@ function contentC1(form) {
 function contentC2(form, photos, imgMap) {
   const f1 = form.part1 ?? {};
   const entries = [
-    { label:"Grounding PHB TM",       nilai: gf(form,"part1.phb_tm.grounding_phbtm.nilai"),           pk:"phb_tm.grounding_phbtm" },
-    { label:"Grounding Arester TM",   nilai: gf(form,"part1.phb_tm.grounding_arester.nilai"),          pk:"phb_tm.grounding_arester" },
-    { label:"Grounding Netral Trafo", nilai: gf(form,"part1.trafo.grounding_pengukuran.nilaiNetral"),  pk:"trafo.grounding_pengukuran" },
-    { label:"Grounding Body Trafo",   nilai: gf(form,"part1.trafo.grounding_pengukuran.nilaiBody"),    pk:"trafo.grounding_pengukuran" },
-    { label:"Grounding PHB TR",       nilai: gf(form,"part1.phb_tr.grounding_phbtr.nilai"),            pk:"phb_tr.grounding_phbtr" },
+    { label:"Grounding PHB TM",       nilai: gf(form,"part1.phb_tm.grounding_phbtm.nilai"),           pk:"phb_tm.grounding_phbtm",     fk:"phb_tm.grounding_phbtm.nilai",           legacyIdx:0 },
+    { label:"Grounding Arester TM",   nilai: gf(form,"part1.phb_tm.grounding_arester.nilai"),          pk:"phb_tm.grounding_arester",   fk:"phb_tm.grounding_arester.nilai",         legacyIdx:0 },
+    { label:"Grounding Netral Trafo", nilai: gf(form,"part1.trafo.grounding_pengukuran.nilaiNetral"),  pk:"trafo.grounding_pengukuran", fk:"trafo.grounding_pengukuran.nilaiNetral", legacyIdx:0 },
+    { label:"Grounding Body Trafo",   nilai: gf(form,"part1.trafo.grounding_pengukuran.nilaiBody"),    pk:"trafo.grounding_pengukuran", fk:"trafo.grounding_pengukuran.nilaiBody",   legacyIdx:1 },
+    { label:"Grounding PHB TR",       nilai: gf(form,"part1.phb_tr.grounding_phbtr.nilai"),            pk:"phb_tr.grounding_phbtr",     fk:"phb_tr.grounding_phbtr.nilai",           legacyIdx:0 },
   ];
   const tbl = new Table({
     width: { size: 100, type: WidthType.PERCENTAGE },
     rows: [
       new TableRow({ children: [hCell("No",{w:6}), hCell("Titik Grounding",{w:44,center:false}), hCell("Nilai (Ω)",{w:18}), hCell("Foto",{w:32})] }),
       ...entries.map((e,i) => {
-        const url = gp(photos,"part1",e.pk)[0];
+        // per-field [Foto Jauh, Foto Nilai] → utamakan Foto Nilai; fallback foto lama.
+        const pf  = gp(photos,"part1",e.fk);
+        const url = pf[1] || pf[0] || gp(photos,"part1",e.pk)[e.legacyIdx ?? 0];
         const buf = url ? imgMap.get(url) : null;
         const img = buf ? makeImg(buf, 110, 65) : null;
         return new TableRow({ children: [
@@ -996,7 +992,9 @@ export async function downloadLhppDocx(data, instansi, filename = "LHPP.docx") {
     ...buildPage({ ...fp, code:"A.5", title:"SPESIFIKASI TEKNIK PHB TR",                    content: contentA5(form, photos, imgMap) }),
     ...buildPage({ ...fp, code:"A.6", title:"HASIL UJI PABRIK / SERTIFIKAT PRODUK",        content: contentA6(form, photos, imgMap) }),
     ...buildPage({ ...fp, code:"B.1", title:"KONSTRUKSI",                                   content: contentB1(form, photos, imgMap) }),
-    ...buildPage({ ...fp, code:"B.2", title:"SISTEM PEMBUMIAN",                             content: contentB2(form, photos, imgMap) }),
+    ...buildPage({ ...fp, code:"B.2.1", title:"SISTEM PEMBUMIAN — PHB TM",                  content: contentB2Tm(photos, imgMap) }),
+    ...buildPage({ ...fp, code:"B.2.2", title:"SISTEM PEMBUMIAN — PHB TR",                  content: contentB2Tr(photos, imgMap) }),
+    ...buildPage({ ...fp, code:"B.2.3", title:"SISTEM PEMBUMIAN — TRAFO",                   content: contentB2Trafo(photos, imgMap) }),
     ...buildPage({ ...fp, code:"B.3", title:"PENGAMAN ELEKTRIK",                            content: contentB3(form, photos, imgMap) }),
     ...buildPage({ ...fp, code:"B.4", title:"PENGAMAN MEKANIK",                             content: contentB4(form, photos, imgMap) }),
     ...buildPage({ ...fp, code:"B.5", title:"JARAK BEBAS (CLEARANCE DISTANCE)",             content: contentB5(form) }),

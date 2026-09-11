@@ -20,6 +20,14 @@ const ISOLASI_PER_FIELD = {
   photo: false,
 };
 
+// Pengukuran grounding / tegangan / beban — tiap titik ukur punya 2 foto:
+// foto jauh (posisi alat) + foto nilai (angka di display alat ukur).
+const JAUH_NILAI_PER_FIELD = {
+  perFieldPhotos: 2,
+  perFieldPhotoLabels: ["Foto Jauh", "Foto Nilai"],
+  photo: false,
+};
+
 // Jarak gabungan — 4 arah dalam 1 grup, masing-masing 2 foto
 const jarakGroup = {
   key: "jarak", label: "Jarak",
@@ -113,24 +121,13 @@ export const formSchema = {
           photoLabels: ["Foto Fuse Nameplate"],
           fields: [{ name: "rating", label: "Rating Fuse", type: "text" }],
         },
-        // CT & PT dipisah tombol kameranya (urutan: CT in → CT out → PT in → PT out)
-        {
-          key: "ct_incoming", label: "CT Incoming",
-          photo: true, minPhotos: 1,
-          photoLabels: ["Foto CT Incoming"],
-          fields: [{ name: "ratingCT", label: "Rating CT", type: "text", placeholder: "100/5" }],
-        },
+        // CT & PT — hanya Outgoing yang diinput. Incoming sudah dihapus dari form
+        // (data lama tetap tersimpan di Firestore, laporan fallback ke Outgoing).
         {
           key: "ct_outgoing", label: "CT Outgoing",
           photo: true, minPhotos: 1,
           photoLabels: ["Foto CT Outgoing"],
           fields: [{ name: "ratingCT", label: "Rating CT", type: "text", placeholder: "100/5" }],
-        },
-        {
-          key: "pt_incoming", label: "PT Incoming",
-          photo: true, minPhotos: 1,
-          photoLabels: ["Foto PT Incoming"],
-          fields: [{ name: "ratingPT", label: "Rating PT", type: "text" }],
         },
         {
           key: "pt_outgoing", label: "PT Outgoing",
@@ -160,8 +157,10 @@ export const formSchema = {
           photo: true, minPhotos: 2,
           photoLabels: ["Foto Nameplate Kabel","Foto Jalur Kabel Incoming"],
           fields: [
-            { name: "tipe",   label: "Tipe Kabel",    type: "text" },
-            { name: "ukuran", label: "Ukuran (mm²)", type: "text" },
+            { name: "merk",    label: "Merk",          type: "text" },
+            { name: "tipe",    label: "Tipe Kabel",    type: "text" },
+            { name: "ukuran",  label: "Ukuran (mm²)", type: "text" },
+            { name: "panjang", label: "Panjang (m)",   type: "number" },
           ],
         },
         {
@@ -169,8 +168,10 @@ export const formSchema = {
           photo: true, minPhotos: 2,
           photoLabels: ["Foto Nameplate Kabel","Foto Jalur Kabel Outgoing"],
           fields: [
-            { name: "tipe",   label: "Tipe Kabel",    type: "text" },
-            { name: "ukuran", label: "Ukuran (mm²)", type: "text" },
+            { name: "merk",    label: "Merk",          type: "text" },
+            { name: "tipe",    label: "Tipe Kabel",    type: "text" },
+            { name: "ukuran",  label: "Ukuran (mm²)", type: "text" },
+            { name: "panjang", label: "Panjang (m)",   type: "number" },
           ],
         },
         {
@@ -212,14 +213,12 @@ export const formSchema = {
         },
         {
           key: "grounding_phbtm", label: "Pengukuran Grounding PHB TM",
-          photo: true, minPhotos: 1,
-          photoLabels: ["Foto Pengukuran Grounding PHB TM"],
+          ...JAUH_NILAI_PER_FIELD,
           fields: [{ name: "nilai", label: "Nilai Pengukuran (Ω)", type: "number" }],
         },
         {
           key: "grounding_arester", label: "Pengukuran Grounding Arester TM",
-          photo: true, minPhotos: 1,
-          photoLabels: ["Foto Pengukuran Grounding Arester TM"],
+          ...JAUH_NILAI_PER_FIELD,
           fields: [{ name: "nilai", label: "Nilai Pengukuran (Ω)", type: "number" }],
         },
         {
@@ -306,8 +305,7 @@ export const formSchema = {
         { key: "kaki_pengunci",      label: "Kaki Pengunci Gerak Trafo",      photo: true, photoOnly: true, minPhotos: 1, fields: [] },
         {
           key: "grounding_pengukuran", label: "Pengukuran Grounding Trafo",
-          photo: true, minPhotos: 2,
-          photoLabels: ["Foto Pengukuran Grounding Netral","Foto Pengukuran Grounding Body"],
+          ...JAUH_NILAI_PER_FIELD,
           fields: [
             { name: "nilaiNetral", label: "Nilai Grounding Netral (Ω)", type: "number" },
             { name: "nilaiBody",   label: "Nilai Grounding Body (Ω)",   type: "number" },
@@ -417,12 +415,15 @@ export const formSchema = {
           ],
         },
         {
-          key: "acb_utama", label: "ACB Utama",
+          // key tetap "acb_utama" demi kompatibilitas data & template lama.
+          // "jenis" menentukan pemutus utama: ACB (default) atau MCCB pengganti.
+          key: "acb_utama", label: "Pemutus Utama (ACB / MCCB)",
           photo: true, minPhotos: 1,
-          photoLabels: ["Foto Full ACB UTAMA"],
+          photoLabels: ["Foto Full Pemutus Utama"],
           fields: [
-            { name: "merk",                  label: "Merk ACB",                         type: "text" },
-            { name: "tipe",                  label: "Tipe ACB",                         type: "text" },
+            { name: "jenis",                 label: "Jenis Pemutus",                    type: "select", options: ["ACB", "MCCB"], default: "ACB" },
+            { name: "merk",                  label: "Merk",                            type: "text" },
+            { name: "tipe",                  label: "Tipe",                            type: "text" },
             { name: "ratingV",               label: "Rating V",                         type: "number" },
             { name: "ratingI",               label: "Rating I / In (A)",                type: "number" },
             { name: "overload",              label: "I Over Load (Namplate)",           type: "text", placeholder: "1 x In" },
@@ -434,9 +435,9 @@ export const formSchema = {
           ],
         },
         {
-          key: "nameplate_acb", label: "Nameplate ACB UTAMA",
+          key: "nameplate_acb", label: "Nameplate Pemutus Utama",
           photo: true, minPhotos: 1,
-          photoLabels: ["Foto Nameplate ACB UTAMA"],
+          photoLabels: ["Foto Nameplate Pemutus Utama"],
           fields: [{ name: "nameplate", label: "Data Nameplate", type: "text" }],
         },
         {
@@ -499,8 +500,7 @@ export const formSchema = {
         },
         {
           key: "grounding_phbtr", label: "Pengukuran Grounding PHB TR",
-          photo: true, minPhotos: 1,
-          photoLabels: ["Foto Pengukuran Grounding PHB TR"],
+          ...JAUH_NILAI_PER_FIELD,
           fields: [{ name: "nilai", label: "Nilai Pengukuran (Ω)", type: "number" }],
         },
         jarakGroup,
@@ -532,7 +532,7 @@ export const formSchema = {
         {
           key: "tegangan", label: "Tegangan PHB TR",
           perFieldPhotos: 2,
-          perFieldPhotoLabels: ["Foto Jauh", "Foto Hasil Pengujian"],
+          perFieldPhotoLabels: ["Foto Jauh", "Foto Nilai"],
           valueLabel: "Tegangan (V)",
           photo: false,
           fields: [
@@ -548,7 +548,7 @@ export const formSchema = {
         {
           key: "beban", label: "Pengukuran Beban",
           perFieldPhotos: 2,
-          perFieldPhotoLabels: ["Foto Jauh", "Foto Hasil Pengujian"],
+          perFieldPhotoLabels: ["Foto Jauh", "Foto Nilai"],
           valueLabel: "Arus (A)",
           photo: false,
           fields: [
@@ -573,8 +573,8 @@ export const formSchema = {
         },
         {
           key: "suhu_sambungan", label: "Suhu Titik Sambungan",
-          perFieldPhotos: 1,
-          perFieldPhotoLabels: ["Foto Pengukuran"],
+          perFieldPhotos: 2,
+          perFieldPhotoLabels: ["Foto Jauh", "Foto Nilai"],
           photo: false,
           fields: [
             { name: "trafo",       label: "Terminal Trafo (°C)",    type: "number" },
@@ -678,7 +678,22 @@ export const formSchema = {
       label: "Gambar",
       groups: [
         { key: "diagram",    label: "Diagram Satu Garis",   photo: true, photoOnly: true, minPhotos: 1, fields: [] },
-        { key: "tata_letak", label: "Tata Letak Peralatan", photo: true, photoOnly: true, minPhotos: 1, fields: [] },
+        {
+          key: "tata_letak", label: "Tata Letak Peralatan",
+          photo: true, minPhotos: 1,
+          photoLabels: ["Foto Tata Letak Peralatan"],
+          fields: [
+            {
+              name: "layoutTemplate",
+              label: "Template Diagram Layout (auto dari data Jarak Bebas)",
+              type: "select",
+              options: [
+                { value: "A", label: "A — 2 ruang persegi" },
+                { value: "B", label: "B — Layout Peralatan (ruang bentuk-L)" },
+              ],
+            },
+          ],
+        },
       ],
     },
 

@@ -2,7 +2,7 @@
 import { useParams, useNavigate } from "react-router-dom";
 import { db } from "../../firebase/config";
 import { doc, getDoc, updateDoc, onSnapshot } from "firebase/firestore";
-import { uploadViaPresign, publicUrl } from "../../firebase/secureStorage";
+import { uploadDual, mapPhotosTree, flattenFbMap } from "../../firebase/dualUpload";
 import { AuthContext } from "../../context/AuthContext";
 import { useLoading } from "../../context/LoadingContext";
 import { useGuestPermission } from "../../hooks/useGuestPermission";
@@ -10,10 +10,11 @@ import { submitForApproval } from "../../services/guestService";
 import imageCompression from "browser-image-compression";
 import {
   ArrowLeft, Eye, Save, Camera, X, CheckCircle, AlertCircle, Download, FolderDown, Lock, Send, Globe, Copy, Link2,
-  Sparkles, Loader2, ScanLine, Settings,
+  Sparkles, Loader2, ScanLine, Settings, UploadCloud,
 } from "lucide-react";
-import { scanNameplate, scanMeasurement } from "../../services/geminiService";
+import { scanNameplate, scanMeasurement, analisaAcb } from "../../services/geminiService";
 import { downloadPhotosZip } from "../../utils/downloadPhotosZip";
+import ImportZipModal from "../../components/ImportZipModal";
 import PhotoLightbox, { downloadPhoto } from "../../components/PhotoLightbox";
 
 import { formSchema, buildDefaultForm } from "../../schema/formSchema";
@@ -43,6 +44,7 @@ const CUSTOMER_FIELDS = [
   { name: "noLhpp",   label: "No. LHPP",      placeholder: "001/LHPP/ADY/IV/2026" },
   { name: "noAgenda", label: "No. Agenda",    placeholder: "00WOT.05-06-2026.2" },
   { name: "noNidi",   label: "No. NIDI",      placeholder: "I.06.2026.Z650" },
+  { name: "noSurat",  label: "No. Urut Surat (BA & SPKPP)", placeholder: "0835" },
 ];
 
 export default function PengujianAdminDetail() {
@@ -56,20 +58,25 @@ export default function PengujianAdminDetail() {
   const needsApproval = role === "guest" && pngPermission === "write_approval";
 
   // â”€â”€ Core state â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-  const [customer, setCustomer]       = useState({ nama: "", kota: "", alamat: "", daya: "", tarif: "", idpel: "", noLhpp: "", noAgenda: "", noNidi: "", saksiNama: "", saksiJabatan: "", pemeriksaNama: "", pemeriksaJabatan: "" });
+  const [customer, setCustomer]       = useState({ nama: "", kota: "", alamat: "", daya: "", tarif: "", idpel: "", noLhpp: "", noAgenda: "", noNidi: "", noSurat: "", saksiNama: "", saksiJabatan: "", pemeriksaNama: "", pemeriksaJabatan: "" });
   const [laporanInfo, setLaporanInfo] = useState({ instansiId: null, ttd: null, ttd_client: null, noLhpp: "" });
   const [instansi, setInstansi]       = useState(null);
   const [form, setForm]               = useState(() => buildDefaultForm(formSchema));
   const [photos, setPhotos]           = useState({ part1: {}, part2: {} });
+  // Salinan URL Firebase per foto: { <urlVPS>: <urlFirebase> } — disaring jadi `photos_fb` saat simpan
+  const [photoFbMap, setPhotoFbMap]   = useState({});
   const [hydrated, setHydrated]       = useState(false);
   const [saving, setSaving]           = useState(false);
   const [pdfLoading, setPdfLoading]   = useState(false);
   const [zipLoading, setZipLoading]   = useState(false);
   const [zipProgress, setZipProgress] = useState(0);
+  const [showImportZip, setShowImportZip] = useState(false);
   const [toast, setToast]             = useState(null);   // { type: "ok"|"err", msg }
   const [activeEq, setActiveEq]       = useState("phb_tm");
   const [instanceCounts, setInstanceCounts] = useState({ trafo: 1, phb_tm: 1 });
   const [laporanSettings, setLaporanSettings] = useState({});
+  // Daftar perlengkapan instalasi D.3/D.4 — string per baris; kosong = auto-derive
+  const [instalasiRingkas, setInstalasiRingkas] = useState("");
   const [clientTtdUploading, setClientTtdUploading] = useState(false);
   const [ttdLightbox, setTtdLightbox] = useState(null); // { url, label }
   const [isPublic, setIsPublic]       = useState(false);
@@ -99,6 +106,7 @@ export default function PengujianAdminDetail() {
           noLhpp:           data.noLhpp           || "",
           noAgenda:         data.noAgenda         || "",
           noNidi:           data.noNidi           || "",
+          noSurat:          data.noSurat          || "",
           saksiNama:        data.saksiNama        || "",
           saksiJabatan:     data.saksiJabatan     || "",
           pemeriksaNama:    data.pemeriksaNama    || "",
@@ -114,12 +122,17 @@ export default function PengujianAdminDetail() {
         setInstanceCounts(data.instanceCounts ?? { trafo: 1, phb_tm: 1 });
         setGroupOrder(data.groupOrder ?? {});
         setLaporanSettings(data.laporanSettings ?? {});
+        setInstalasiRingkas(
+          Array.isArray(data.instalasiRingkas) ? data.instalasiRingkas.join("\n") : ""
+        );
         const { formData, photos: migratedPhotos } = migrateFormData(
           data.formData,
           data.photos
         );
         setForm(prev => mergeDeep(prev, formData ?? {}));
-        setPhotos(migratedPhotos ?? { part1: {}, part2: {} });
+        const loadedPhotos = migratedPhotos ?? { part1: {}, part2: {} };
+        setPhotos(loadedPhotos);
+        setPhotoFbMap(flattenFbMap(loadedPhotos, data.photos_fb));
       } catch (err) {
         console.error(err);
       } finally {
@@ -194,8 +207,8 @@ export default function PengujianAdminDetail() {
     try {
       const compressed = await imageCompression(file, { maxSizeMB: 0.5, maxWidthOrHeight: 1280, useWebWorker: false });
       const path = `pengujian/${user.uid}/${id}/${partKey}/${photoKey}/${Date.now()}`;
-      await uploadViaPresign(path, compressed, "image/jpeg");
-      const url = publicUrl(path);
+      const { vpsUrl: url, fbUrl } = await uploadDual(path, compressed);
+      if (fbUrl) setPhotoFbMap(m => ({ ...m, [url]: fbUrl }));
       setPhotos(prev => {
         const arr = [...(prev[partKey]?.[photoKey] ?? [])];
         const idx = arr.indexOf(preview);
@@ -205,6 +218,19 @@ export default function PengujianAdminDetail() {
       URL.revokeObjectURL(preview);
     } catch (err) {
       console.error(err);
+      URL.revokeObjectURL(preview);
+      // Buang preview blob yang gagal upload — jangan biarkan tersimpan ke
+      // Firestore (URL blob mati setelah reload = foto hilang saat relog).
+      setPhotos(prev => {
+        const arr = [...(prev[partKey]?.[photoKey] ?? [])];
+        const idx = arr.indexOf(preview);
+        if (idx !== -1) {
+          if (slotIdx !== undefined) arr[idx] = "";
+          else arr.splice(idx, 1);
+        }
+        return { ...prev, [partKey]: { ...prev[partKey], [photoKey]: arr } };
+      });
+      showToast("err", "Upload foto gagal — foto tidak tersimpan. Coba lagi.");
     }
   };
 
@@ -252,8 +278,8 @@ export default function PengujianAdminDetail() {
       ctx.drawImage(img, -img.naturalWidth / 2, -img.naturalHeight / 2);
       const blob = await new Promise(res => canvas.toBlob(res, "image/jpeg", 0.85));
       const rotPath = `pengujian/${user.uid}/${id}/${partKey}/${photoKey}/${Date.now()}`;
-      await uploadViaPresign(rotPath, blob, "image/jpeg");
-      const newUrl = publicUrl(rotPath);
+      const { vpsUrl: newUrl, fbUrl } = await uploadDual(rotPath, blob);
+      if (fbUrl) setPhotoFbMap(m => ({ ...m, [newUrl]: fbUrl }));
       setPhotos(prev => {
         const arr = [...(prev[partKey]?.[photoKey] ?? [])];
         arr[slotIdx] = newUrl;
@@ -345,9 +371,8 @@ export default function PengujianAdminDetail() {
     try {
       const compressed = await imageCompression(file, { maxSizeMB: 0.3, maxWidthOrHeight: 800, useWebWorker: false });
       const ttdPath = `pengujian/${user.uid}/${id}/ttd_client/${field}`;
-      await uploadViaPresign(ttdPath, compressed, "image/jpeg");
-      const url = publicUrl(ttdPath);
-      setLaporanInfo(prev => ({ ...prev, ttd_client: { ...(prev.ttd_client || {}), [field]: { url } } }));
+      const { vpsUrl: url, fbUrl } = await uploadDual(ttdPath, compressed);
+      setLaporanInfo(prev => ({ ...prev, ttd_client: { ...(prev.ttd_client || {}), [field]: { url, fbUrl } } }));
     } catch (err) {
       console.error(err);
     } finally {
@@ -377,6 +402,35 @@ export default function PengujianAdminDetail() {
     if (!hydrated || docNotFound) return;
     setSaving(true);
     try {
+      // ── Mini-AI: analisa ACB Utama PHB TR saat spesifikasinya berubah ──────
+      let formToSave = form;
+      try {
+        const acb = form.part1?.phb_tr?.acb_utama ?? {};
+        const sig = JSON.stringify([
+          acb.merk, acb.tipe, acb.ratingV, acb.ratingI, acb.overload, acb.instantenious,
+          acb.trippingDelay, acb.settingOverload, acb.settingInstantenious, acb.settingTrippingDelay,
+        ]);
+        const hasAcb = acb.merk || acb.tipe || acb.ratingI;
+        if (hasAcb && sig !== form.part1?.phb_tr?.acb_analisa?.sig) {
+          showToast("ok", "Menganalisa spesifikasi ACB (AI)…");
+          const res = await analisaAcb(acb, {
+            trafoKapasitas:  form.part1?.trafo?.nameplate?.kapasitas,
+            trafoTeganganPS: form.part1?.trafo?.nameplate?.teganganPS,
+            bebanPersen:     form.part1?.phb_tr?.beban?.persentase,
+          });
+          if (res.tujuanProteksi || res.analisa) {
+            formToSave = {
+              ...form,
+              part1: setPath(form.part1, "phb_tr.acb_analisa", { ...res, sig, generatedAt: Date.now() }),
+            };
+            setForm(formToSave);
+          }
+        }
+      } catch (err) {
+        console.warn("Analisa ACB gagal:", err);
+        showToast("err", "Analisa ACB (AI) dilewati — " + (err.message || "gagal"));
+      }
+
       const payload = {
         nama:             customer.nama.trim(),
         kota:             customer.kota.trim(),
@@ -387,6 +441,7 @@ export default function PengujianAdminDetail() {
         noLhpp:           customer.noLhpp.trim(),
         noAgenda:         customer.noAgenda.trim(),
         noNidi:           customer.noNidi.trim(),
+        noSurat:          customer.noSurat.trim(),
         saksiNama:        customer.saksiNama.trim(),
         saksiJabatan:     customer.saksiJabatan.trim(),
         pemeriksaNama:    customer.pemeriksaNama.trim(),
@@ -398,8 +453,11 @@ export default function PengujianAdminDetail() {
         instanceCounts,
         groupOrder,
         laporanSettings,
-        formData:   form,
+        instalasiRingkas: instalasiRingkas
+          .split("\n").map(s => s.trim()).filter(Boolean),
+        formData:   formToSave,
         photos:     buildSafePhotos(photos),
+        photos_fb:  mapPhotosTree(buildSafePhotos(photos), (u) => photoFbMap[u] ?? null),
         updatedAt:  new Date(),
       };
 
@@ -710,6 +768,17 @@ export default function PengujianAdminDetail() {
               <FolderDown className="w-4 h-4" />
               {zipLoading ? `ZIP ${zipProgress}%` : "ZIP Foto"}
             </button>
+            {!isReadOnly && (
+              <button
+                onClick={() => setShowImportZip(true)}
+                title="Import paket ZIP (manifest.json + foto) ke laporan ini"
+                className="flex items-center gap-1.5 px-3 py-2 text-sm border border-amber-200
+                  text-amber-700 bg-amber-50 rounded-lg hover:bg-amber-100 transition"
+              >
+                <UploadCloud className="w-4 h-4" />
+                Import ZIP
+              </button>
+            )}
             {isReadOnly ? (
               <span className="flex items-center gap-1.5 px-3 py-2 text-sm bg-amber-50 text-amber-700 border border-amber-200 rounded-lg">
                 <Lock className="w-4 h-4" /> Hanya Baca
@@ -723,12 +792,21 @@ export default function PengujianAdminDetail() {
                   ${needsApproval ? "bg-blue-500 hover:bg-blue-600" : "bg-blue-600 hover:bg-blue-700"}`}
               >
                 {needsApproval ? <Send className="w-4 h-4" /> : <Save className="w-4 h-4" />}
-                {saving ? "Menyimpanâ€¦" : needsApproval ? "Ajukan Perubahan" : "Simpan"}
+                {saving ? "Menyimpan" : needsApproval ? "Ajukan Perubahan" : "Simpan"}
               </button>
             )}
           </div>
         </div>
       </div>
+
+      {/* â”€â”€ Import ZIP â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+      {showImportZip && (
+        <ImportZipModal
+          pengujianId={id}
+          uid={user?.uid}
+          onClose={() => setShowImportZip(false)}
+        />
+      )}
 
       {/* â”€â”€ AI Scan Panel â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
       {showAIPanel && (
@@ -820,6 +898,7 @@ export default function PengujianAdminDetail() {
           instanceCounts={instanceCounts}
           laporanSettings={laporanSettings}
           setLaporanSettings={setLaporanSettings}
+          onSave={handleSave}
           onClose={() => setShowLaporanSettings(false)}
         />
       )}
@@ -876,6 +955,29 @@ export default function PengujianAdminDetail() {
         <section className="bg-white rounded-2xl shadow-sm border border-slate-100 p-5">
           <h2 className="text-sm font-bold text-slate-700 mb-4">Informasi Laporan</h2>
           <LaporanInfoSection value={laporanInfo} onChange={setLaporanInfo} />
+        </section>
+
+        {/* â”€â”€ Daftar Perlengkapan Instalasi (D.3 / D.4) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+        <section className="bg-white rounded-2xl shadow-sm border border-slate-100 p-5">
+          <h2 className="text-sm font-bold text-slate-700 mb-1">Daftar Perlengkapan Instalasi</h2>
+          <p className="text-xs text-slate-500 mb-3">
+            Muncul di <b>D.3 Berita Acara</b> &amp; <b>D.4 Surat Kesesuaian</b> sebagai daftar bernomor.
+            Satu item per baris. <b>Kosongkan</b> untuk isi otomatis dari data trafo / PHB / kabel.
+          </p>
+          <textarea
+            value={instalasiRingkas}
+            onChange={e => setInstalasiRingkas(e.target.value)}
+            disabled={isReadOnly}
+            rows={7}
+            placeholder={"1 Unit Trafo Daya 630 kVA\n1 Unit PHB TM\n1 Unit PHB TR\n25 ms Kabel SKTM 20 kV\n23 ms Kabel SKTR\n1 Lot Pembumian"}
+            className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm font-mono
+              focus:outline-none focus:ring-2 focus:ring-blue-400 disabled:bg-slate-50"
+          />
+          <p className="text-[11px] text-slate-400 mt-1">
+            {instalasiRingkas.split("\n").map(s => s.trim()).filter(Boolean).length} item
+            {" · "}
+            {instalasiRingkas.trim() ? "override manual aktif" : "mode otomatis"}
+          </p>
         </section>
 
         {/* â”€â”€ TTD Pihak Client â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
@@ -1200,7 +1302,18 @@ export default function PengujianAdminDetail() {
 
 const EQ_LABELS = { trafo: "Trafo", phb_tm: "PHB TM", phb_tr: "PHB TR" };
 
-function LaporanSettingsModal({ instanceCounts, laporanSettings, setLaporanSettings, onClose }) {
+function LaporanSettingsModal({ instanceCounts, laporanSettings, setLaporanSettings, onSave, onClose }) {
+  const [savingSettings, setSavingSettings] = useState(false);
+  const handleSaveClose = async () => {
+    if (savingSettings) return;
+    setSavingSettings(true);
+    try {
+      await onSave?.();
+    } finally {
+      setSavingSettings(false);
+      onClose?.();
+    }
+  };
   // Build flat list of instances to show in sidebar
   const instances = [];
   for (const baseKey of MULTI_INSTANCE_KEYS) {
@@ -1491,13 +1604,20 @@ function LaporanSettingsModal({ instanceCounts, laporanSettings, setLaporanSetti
         {/* Modal footer */}
         <div className="shrink-0 border-t border-slate-100 px-5 py-3 flex items-center gap-3 bg-white">
           <button
-            onClick={onClose}
-            className="px-4 py-2 rounded-lg text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 transition"
+            onClick={handleSaveClose}
+            disabled={savingSettings}
+            className="px-4 py-2 rounded-lg text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 transition disabled:opacity-60"
           >
-            Simpan &amp; Tutup
+            {savingSettings ? "Menyimpan…" : "Simpan & Tutup"}
+          </button>
+          <button
+            onClick={onClose}
+            className="px-4 py-2 rounded-lg text-sm font-medium text-slate-600 hover:bg-slate-100 transition"
+          >
+            Tutup
           </button>
           <p className="text-[11px] text-slate-400">
-            Klik <strong>Simpan</strong> di header untuk menyimpan ke database
+            <strong>Simpan &amp; Tutup</strong> langsung menyimpan ke database
           </p>
         </div>
       </div>
@@ -1511,7 +1631,12 @@ function buildSafePhotos(photos) {
   for (const p of ["part1", "part2"]) {
     for (const k in (photos[p] ?? {})) {
       const arr = photos[p][k] ?? [];
-      clean[p][k] = arr.filter(v => typeof v === "string");
+      // Hanya URL persisten yang boleh masuk Firestore. `blob:` (preview
+      // upload yang belum/ gagal selesai) & `capacitor:` mati setelah reload
+      // -> foto "hilang" saat relog. Ganti jadi "" supaya indeks slot tetap.
+      clean[p][k] = arr.map(v =>
+        typeof v === "string" && (v === "" || /^https?:\/\//.test(v)) ? v : ""
+      );
     }
   }
   return clean;

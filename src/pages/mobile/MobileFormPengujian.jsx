@@ -2,7 +2,7 @@
 import { useParams, useNavigate } from "react-router-dom";
 import { db } from "../../firebase/config";
 import { doc, updateDoc, getDoc } from "firebase/firestore";
-import { uploadViaPresign, publicUrl } from "../../firebase/secureStorage";
+import { uploadDual, mapPhotosTree, flattenFbMap } from "../../firebase/dualUpload";
 import { AuthContext } from "../../context/AuthContext";
 import imageCompression from "browser-image-compression";
 import { addGpsWatermark } from "../../utils/geoWatermark";
@@ -35,6 +35,8 @@ export default function MobileFormPengujian() {
   const [instanceCounts, setInstanceCounts] = useState({ trafo: 1, phb_tm: 1, phb_tr: 1 });
   const [form, setForm] = useState(() => buildDefaultForm(formSchema));
   const [photos, setPhotos] = useState({ part1: {}, part2: {} });
+  // { <urlVPS>: <urlFirebase> } — disaring jadi `photos_fb` saat menulis ke Firestore
+  const [photoFbMap, setPhotoFbMap] = useState({});
   const [laporanInfo, setLaporanInfo] = useState({ instansiId: null, ttd: null, ttd_client: null, noLhpp: "" });
   const [loading, setLoading] = useState(false);
   const [hydrated, setHydrated] = useState(false);
@@ -100,6 +102,7 @@ export default function MobileFormPengujian() {
 
           setForm(prev => mergeDeep(prev, formData ?? {}));
           setPhotos(mergedPhotos);
+          setPhotoFbMap(flattenFbMap(mergedPhotos, data.photos_fb));
           setInstanceCounts(data.instanceCounts ?? { trafo: 1, phb_tm: 1, phb_tr: 1 });
           setLaporanInfo({
             instansiId: data.instansiId ?? null,
@@ -175,6 +178,7 @@ export default function MobileFormPengujian() {
       updateDoc(doc(db, "pengujian", id), {
         formData: form,
         photos: buildSafePhotos(photos),
+        photos_fb: mapPhotosTree(buildSafePhotos(photos), (u) => photoFbMap[u] ?? null),
         instansiId: laporanInfo.instansiId,
         ttd: laporanInfo.ttd,
         ttd_client: laporanInfo.ttd_client,
@@ -183,7 +187,7 @@ export default function MobileFormPengujian() {
       }).catch(console.error);
     }, 1000);
     return () => clearTimeout(t);
-  }, [form, photos, laporanInfo, hydrated, id]);
+  }, [form, photos, photoFbMap, laporanInfo, hydrated, id]);
 
   // â”€â”€ HANDLERS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const handleChange = (partKey, path, value) => {
@@ -219,8 +223,8 @@ export default function MobileFormPengujian() {
           [partKey]: { ...prev[partKey], [photoKey]: [...(prev[partKey]?.[photoKey] ?? []), preview] },
         }));
 
-        await uploadViaPresign(storagePath, compressed, "image/jpeg");
-        const url = publicUrl(storagePath);
+        const { vpsUrl: url, fbUrl } = await uploadDual(storagePath, compressed);
+        if (fbUrl) setPhotoFbMap(m => ({ ...m, [url]: fbUrl }));
 
         setPhotos(prev => {
           const arr = [...(prev[partKey]?.[photoKey] ?? [])];
@@ -279,11 +283,10 @@ export default function MobileFormPengujian() {
     try {
       const compressed = await imageCompression(file, { maxSizeMB: 0.3, maxWidthOrHeight: 800, useWebWorker: false });
       const ttdPath = `pengujian/${user.uid}/${id}/ttd_client/${field}`;
-      await uploadViaPresign(ttdPath, compressed, "image/jpeg");
-      const url = publicUrl(ttdPath);
+      const { vpsUrl: url, fbUrl } = await uploadDual(ttdPath, compressed);
       setLaporanInfo(prev => ({
         ...prev,
-        ttd_client: { ...(prev.ttd_client || {}), [field]: { url } },
+        ttd_client: { ...(prev.ttd_client || {}), [field]: { url, fbUrl } },
       }));
     } catch (err) {
       console.error(err);
@@ -382,6 +385,7 @@ export default function MobileFormPengujian() {
       await updateDoc(doc(db, "pengujian", id), {
         formData: form,
         photos: buildSafePhotos(photos),
+        photos_fb: mapPhotosTree(buildSafePhotos(photos), (u) => photoFbMap[u] ?? null),
         instansiId: laporanInfo.instansiId,
         ttd: laporanInfo.ttd,
         ttd_client: laporanInfo.ttd_client,
@@ -405,6 +409,7 @@ export default function MobileFormPengujian() {
       await updateDoc(doc(db, "pengujian", id), {
         formData: form,
         photos: buildSafePhotos(photos),
+        photos_fb: mapPhotosTree(buildSafePhotos(photos), (u) => photoFbMap[u] ?? null),
         instansiId: laporanInfo.instansiId,
         ttd: laporanInfo.ttd,
         ttd_client: laporanInfo.ttd_client,

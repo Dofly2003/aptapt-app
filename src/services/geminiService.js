@@ -133,3 +133,56 @@ Aturan:
 
   return result?.value ?? null;
 }
+
+/**
+ * Mini-AI: analisa proteksi ACB Utama PHB TR dari spesifikasi + setting-nya.
+ * @param {object} acb  - field acb_utama (merk, tipe, ratingV, ratingI, overload,
+ *                        instantenious, trippingDelay, settingOverload,
+ *                        settingInstantenious, settingTrippingDelay)
+ * @param {object} ctx  - { trafoKapasitas, trafoTeganganPS, bebanPersen }
+ * @returns {Promise<{tujuanProteksi:string, analisa:string}>}
+ */
+export async function analisaAcb(acb = {}, ctx = {}) {
+  const v = (x) => (x === undefined || x === null || x === "" ? "-" : String(x));
+
+  // Arus nominal trafo sisi sekunder (A) = kVA*1000 / (√3 * V_sekunder)
+  const kva = parseFloat(String(ctx.trafoKapasitas ?? "").replace(",", "."));
+  const vSek = parseFloat(
+    String(ctx.trafoTeganganPS ?? "").replace(/[.\s]/g, "").split(/[/xX-]/)[1] ?? ""
+  );
+  const inTrafo = Number.isFinite(kva) && Number.isFinite(vSek) && vSek > 0
+    ? Math.round((kva * 1000) / (Math.sqrt(3) * vSek))
+    : null;
+
+  const prompt = `Kamu insinyur proteksi tenaga listrik. Berdasarkan spesifikasi ACB (Air Circuit Breaker) utama PHB TR berikut, tulis analisa RINGKAS.
+
+Data ACB:
+- Merk / Tipe: ${v(acb.merk)} / ${v(acb.tipe)}
+- Rating tegangan (Ue): ${v(acb.ratingV)} V
+- Rating arus (In): ${v(acb.ratingI)} A
+- I Overload (nameplate): ${v(acb.overload)}
+- I Instantaneous (nameplate): ${v(acb.instantenious)}
+- Tripping delay (nameplate): ${v(acb.trippingDelay)}
+- Setting Overload (long-time): ${v(acb.settingOverload)}
+- Setting Instantaneous (short-circuit): ${v(acb.settingInstantenious)}
+- Setting Tripping delay: ${v(acb.settingTrippingDelay)}
+
+Konteks instalasi:
+- Kapasitas trafo: ${v(ctx.trafoKapasitas)} kVA
+- Tegangan sekunder: ${Number.isFinite(vSek) ? vSek : "-"} V
+- Arus nominal trafo (hitung): ${inTrafo ?? "-"} A
+- Persentase pembebanan: ${v(ctx.bebanPersen)} %
+
+Tugas — kembalikan HANYA JSON:
+{
+  "tujuanProteksi": "1 paragraf (2-4 kalimat) Bahasa Indonesia teknis: fungsi proteksi ACB ini — proteksi beban lebih (overload/long-time), hubung singkat (instantaneous/short-circuit), dan tunda trip — dikaitkan dengan nilai setting yang ada.",
+  "analisa": "1 paragraf (2-4 kalimat) Bahasa Indonesia teknis: penilaian kelayakan rating & setting ACB terhadap arus nominal trafo dan pembebanan; sebut bila ada indikasi under/over-protection; beri rekomendasi singkat bila perlu. Jika data kurang, sebutkan asumsi seperlunya."
+}
+Tanpa markdown, tanpa bullet.`;
+
+  const res = await callGemini([{ text: prompt }]);
+  return {
+    tujuanProteksi: typeof res?.tujuanProteksi === "string" ? res.tujuanProteksi.trim() : "",
+    analisa: typeof res?.analisa === "string" ? res.analisa.trim() : "",
+  };
+}

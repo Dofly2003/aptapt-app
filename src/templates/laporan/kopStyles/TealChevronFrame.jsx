@@ -12,6 +12,7 @@ export default function TealChevronFrame({
   code, title,
   showMataUji = true,
   showFooterTtd = true, // di gaya ini "footer TTD" gak ada, cuma bar; tapi tetep respect prop
+  flow = false,
   children,
 }) {
   return (
@@ -29,7 +30,10 @@ export default function TealChevronFrame({
         )}
       </div>
 
-      <div style={{ flex: 1, minHeight: 0, overflow: "hidden" }}>
+      <div
+        className={flow ? "laporan-section-breakable" : undefined}
+        style={flow ? { flex: 1 } : { flex: 1, minHeight: 0, overflow: "hidden" }}
+      >
         {children}
       </div>
 

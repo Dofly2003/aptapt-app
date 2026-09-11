@@ -403,11 +403,11 @@ function IsolasiTable({ title, form, eqKey, groupKey, fields }) {
 // Tabel Pengukuran Grounding (C.2)
 function GroundingMeasTable({ form, photos }) {
   const entries = [
-    { label:"Grounding PHB TM",      nilai: gf(form,"part1.phb_tm.grounding_phbtm.nilai"),          photoKey:"phb_tm.grounding_phbtm" },
-    { label:"Grounding Arester TM",  nilai: gf(form,"part1.phb_tm.grounding_arester.nilai"),        photoKey:"phb_tm.grounding_arester" },
-    { label:"Grounding Netral Trafo",nilai: gf(form,"part1.trafo.grounding_pengukuran.nilaiNetral"),photoKey:"trafo.grounding_pengukuran" },
-    { label:"Grounding Body Trafo",  nilai: gf(form,"part1.trafo.grounding_pengukuran.nilaiBody"),  photoKey:"trafo.grounding_pengukuran" },
-    { label:"Grounding PHB TR",      nilai: gf(form,"part1.phb_tr.grounding_phbtr.nilai"),          photoKey:"phb_tr.grounding_phbtr" },
+    { label:"Grounding PHB TM",      nilai: gf(form,"part1.phb_tm.grounding_phbtm.nilai"),          photoKey:"phb_tm.grounding_phbtm",     fieldKey:"phb_tm.grounding_phbtm.nilai",           legacyIdx:0 },
+    { label:"Grounding Arester TM",  nilai: gf(form,"part1.phb_tm.grounding_arester.nilai"),        photoKey:"phb_tm.grounding_arester",   fieldKey:"phb_tm.grounding_arester.nilai",         legacyIdx:0 },
+    { label:"Grounding Netral Trafo",nilai: gf(form,"part1.trafo.grounding_pengukuran.nilaiNetral"),photoKey:"trafo.grounding_pengukuran", fieldKey:"trafo.grounding_pengukuran.nilaiNetral", legacyIdx:0 },
+    { label:"Grounding Body Trafo",  nilai: gf(form,"part1.trafo.grounding_pengukuran.nilaiBody"),  photoKey:"trafo.grounding_pengukuran", fieldKey:"trafo.grounding_pengukuran.nilaiBody",   legacyIdx:1 },
+    { label:"Grounding PHB TR",      nilai: gf(form,"part1.phb_tr.grounding_phbtr.nilai"),          photoKey:"phb_tr.grounding_phbtr",     fieldKey:"phb_tr.grounding_phbtr.nilai",           legacyIdx:0 },
   ];
   return (
     <View style={S.tbl}>
@@ -418,8 +418,10 @@ function GroundingMeasTable({ form, photos }) {
           </View>
         ))}
       </View>
-      {entries.map(({ label, nilai, photoKey }, i) => {
-        const pic = first(photos,"part1", photoKey);
+      {entries.map(({ label, nilai, photoKey, fieldKey, legacyIdx }, i) => {
+        // per-field [Foto Jauh, Foto Nilai] → utamakan Foto Nilai; fallback foto lama.
+        const pf  = gp(photos,"part1", fieldKey);
+        const pic = pf[1] || pf[0] || gp(photos,"part1", photoKey)[legacyIdx ?? 0] || null;
         return (
           <View key={i} style={S.dRow} wrap={false}>
             <View style={[S.c, { width:"6%", alignItems:"center" }]}><Text>{i+1}</Text></View>
@@ -1122,16 +1124,26 @@ export default function LhppPDF({ data = {}, instansi = {} }) {
         ]} />
       </LhppPage>
 
-      {/* ════ B.2 — Sistem Pembumian ════════════════════════════════════════════ */}
-      <LhppPage {...fp} code="B.2" title="SISTEM PEMBUMIAN">
-        <PembumianTable form={form} />
+      {/* ════ B.2 — Sistem Pembumian (foto pembumian saja, tanpa nilai) ═════════ */}
+      {/*    Nilai tahanan pembumian tetap di C.2 (PENGUKURAN TAHANAN PEMBUMIAN). */}
+      <LhppPage {...fp} code="B.2.1" title="SISTEM PEMBUMIAN — PHB TM">
         <PhotoGrid items={[
-          { label:"Grounding Cubicle PHB TM", url: gp(photos,"part1","phb_tm.grounding_cubicle")[0] },
-          { label:"Grounding LA / Arester TM",url: gp(photos,"part1","phb_tm.grounding_la")[0] },
-          { label:"Grounding Netral Trafo",   url: gp(photos,"part1","trafo.grounding_netral")[0] },
-          { label:"Grounding Body Trafo",     url: gp(photos,"part1","trafo.grounding_body")[0] },
-          { label:"Grounding Cubicle PHB TR", url: gp(photos,"part1","phb_tr.grounding_cubicle")[0] },
-        ].filter(i => i.url)} />
+          { label:"Grounding Body Cubicle (Dalam)", url: gp(photos,"part1","phb_tm.grounding_cubicle")[0] },
+          { label:"Ground Rod Cubicle (Luar)",      url: gp(photos,"part1","phb_tm.grounding_cubicle")[1] },
+        ]} />
+      </LhppPage>
+
+      <LhppPage {...fp} code="B.2.2" title="SISTEM PEMBUMIAN — PHB TR">
+        <PhotoGrid items={[
+          { label:"Grounding PHB TR", url: gp(photos,"part1","phb_tr.grounding_cubicle")[0] },
+        ]} />
+      </LhppPage>
+
+      <LhppPage {...fp} code="B.2.3" title="SISTEM PEMBUMIAN — TRAFO">
+        <PhotoGrid items={[
+          { label:"Grounding Netral Trafo", url: gp(photos,"part1","trafo.grounding_netral")[0] },
+          { label:"Grounding Body Trafo",   url: gp(photos,"part1","trafo.grounding_body")[0] },
+        ]} />
       </LhppPage>
 
       {/* ════ B.3 — Pengaman Elektrik ══════════════════════════════════════════ */}

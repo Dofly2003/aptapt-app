@@ -20,6 +20,7 @@ export default function FormalClientFrame({
   code, title,
   showMataUji = true,
   showFooterTtd = true,
+  flow = false,
   children,
 }) {
   return (
@@ -31,7 +32,10 @@ export default function FormalClientFrame({
         )}
       </div>
 
-      <div className="laporan-section" style={{ flex: 1, minHeight: 0, overflow: "hidden" }}>
+      <div
+        className={flow ? "laporan-section-breakable" : "laporan-section"}
+        style={flow ? { flex: 1 } : { flex: 1, minHeight: 0, overflow: "hidden" }}
+      >
         {children}
       </div>
 

@@ -3,6 +3,7 @@ import {
   collection as fsCollection, arrayUnion, serverTimestamp,
 } from "firebase/firestore";
 import { uploadViaPresign, publicUrl } from "../firebase/secureStorage";
+import { uploadFirebaseOnly } from "../firebase/dualUpload";
 import { db as firestore } from "../firebase/config";
 import db from "./db";
 import { isOnline, onNetworkChange } from "./networkWatcher";
@@ -24,6 +25,11 @@ const ALLOWED_ARRAY_FIELDS = new Set([
   "formData.part4.photos", "formData.part5.photos", "formData.part6.photos",
   "formData.part7.photos", "formData.part8.photos", "formData.part9.photos",
   "formData.part10.photos", "photos", "attachments", "lampiran",
+  // Varian cadangan Firebase (photos_fb) — dipakai saat mirror di case "photoUpload"
+  "formData.part1.photos_fb", "formData.part2.photos_fb", "formData.part3.photos_fb",
+  "formData.part4.photos_fb", "formData.part5.photos_fb", "formData.part6.photos_fb",
+  "formData.part7.photos_fb", "formData.part8.photos_fb", "formData.part9.photos_fb",
+  "formData.part10.photos_fb", "photos_fb",
 ]);
 
 const SAFE_STORAGE_PATH_PREFIXES = [
@@ -193,6 +199,21 @@ async function processItem(item) {
         [item.arrayField]: arrayUnion(url),
         updatedAt: serverTimestamp(),
       });
+
+      // Salinan Firebase (cadangan) — best-effort. JANGAN melempar: VPS sudah sukses
+      // dan item akan dihapus dari antrean; kegagalan di sini tidak boleh membuat
+      // item retry selamanya / memblokir antrean (_doFlush berhenti di item gagal).
+      try {
+        const fbUrl = await uploadFirebaseOnly(item.storagePath, blob, "image/jpeg");
+        if (fbUrl) {
+          const fbField = item.arrayField.replace(/(^|\.)photos(\.|$)/, "$1photos_fb$2");
+          if (ALLOWED_ARRAY_FIELDS.has(fbField)) {
+            await updateDoc(docRef, { [fbField]: arrayUnion(fbUrl) });
+          }
+        }
+      } catch (err) {
+        console.warn("[sync] salinan Firebase gagal (diabaikan)", item.storagePath, err?.code ?? err);
+      }
       break;
     }
 

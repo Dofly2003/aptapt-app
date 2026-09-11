@@ -396,6 +396,7 @@ function GroupBlock({
                 label={f.label}
                 value={value}
                 type={f.type}
+                options={f.options}
                 placeholder={f.placeholder}
                 onChange={v => onChange(partKey, path, v)}
                 onFocus={handleFieldFocus}
